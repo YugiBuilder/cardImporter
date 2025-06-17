@@ -1,7 +1,3 @@
-Bien sûr ! Voici un exemple de **README complet** pour ton projet `card-importer-service`, qui importe les cartes Yu-Gi-Oh! depuis l'API YGOPRODeck dans une base MongoDB. Ce README inclut description, configuration, utilisation, Docker, CI/CD et structure du projet.
-
----
-
 # 🃏 card-importer-service
 
 Microservice Java Spring Boot pour importer toutes les cartes Yu-Gi-Oh! depuis l'API publique **YGOPRODeck** et les enregistrer dans une base **MongoDB**. Ce service est destiné à être utilisé dans un projet basé sur des microservices (par exemple, un builder de deck automatisé avec IA).
@@ -216,7 +212,3 @@ jobs:
 ## 📜 Licence
 
 Projet open-source sous [MIT](LICENSE).
-
----
-
-Souhaite-tu que je te génère aussi le fichier `docker-compose.yml`, `.gitignore` ou `.env` ?
