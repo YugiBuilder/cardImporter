@@ -1,4 +1,97 @@
 package com.yugibuilder.cardimporter.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yugibuilder.cardimporter.config.YgoProDeckProperties;
+import com.yugibuilder.cardimporter.model.YugiohCard;
+import com.yugibuilder.cardimporter.repository.YugiohCardRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.*;
+
+@Service
 public class CardImporterService {
+
+    private static final Logger logger = LoggerFactory.getLogger(CardImporterService.class);
+
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final YugiohCardRepository repository;
+    private final YgoProDeckProperties properties;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public CardImporterService(YugiohCardRepository repository, YgoProDeckProperties properties, ObjectMapper objectMapper) {
+        this.repository = repository;
+        this.properties = properties;
+        this.objectMapper = objectMapper;
+    }
+
+    public void importAllCards() {
+        try {
+            logger.info("📥 Importation des cartes depuis l'API : {}", properties.getUrl());
+
+            ResponseEntity<Map> response = restTemplate.getForEntity(properties.getUrl(), Map.class);
+
+            if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
+                logger.error("❌ Erreur API : {}", response.getStatusCode());
+                return;
+            }
+
+            Object data = response.getBody().get("data");
+            List<Map<String, Object>> cards = objectMapper.convertValue(
+                    data,
+                    new TypeReference<List<Map<String, Object>>>() {}
+            );
+            if (cards == null) return;
+
+            List<YugiohCard> cardEntities = new ArrayList<>();
+            for (Map<String, Object> item : cards) {
+                YugiohCard card = new YugiohCard();
+
+                // Conversion sécurisée des types
+                card.setId(item.get("id") != null ? ((Number) item.get("id")).intValue() : null);
+                card.setName((String) item.get("name"));
+                card.setType((String) item.get("type"));
+                card.setDesc((String) item.get("desc"));
+                card.setAtk(item.get("atk") != null ? ((Number) item.get("atk")).intValue() : null);
+                card.setDef(item.get("def") != null ? ((Number) item.get("def")).intValue() : null);
+                card.setLevel(item.get("level") != null ? ((Number) item.get("level")).intValue() : null);
+                card.setRace((String) item.get("race"));
+                card.setAttribute((String) item.get("attribute"));
+                card.setArchetype((String) item.get("archetype"));
+
+                // Cartes imbriquées
+                card.setCard_images(objectMapper.convertValue(
+                        item.get("card_images"),
+                        new TypeReference<List<Map<String, Object>>>() {})
+                );
+
+                card.setCard_sets(objectMapper.convertValue(
+                        item.get("card_sets"),
+                        new TypeReference<List<Map<String, Object>>>() {})
+                );
+
+                card.setCard_prices(objectMapper.convertValue(
+                        item.get("card_prices"),
+                        new TypeReference<List<Map<String, Object>>>() {})
+                );
+
+                cardEntities.add(card);
+            }
+
+            repository.saveAll(cardEntities);
+            logger.info("✅ Importation terminée avec succès : {} cartes enregistrées.", cardEntities.size());
+
+        } catch (RestClientException e) {
+            logger.error("🚨 Erreur lors de l’appel API", e);
+        } catch (Exception e) {
+            logger.error("🔥 Erreur inattendue", e);
+        }
+    }
 }
