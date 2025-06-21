@@ -32,7 +32,7 @@ public class CardImporterService {
         this.objectMapper = objectMapper;
     }
 
-    public void importAllCards() {
+    public int importAllCards() {
         try {
             logger.info("📥 Importation des cartes depuis l'API : {}", properties.getUrl());
 
@@ -40,7 +40,7 @@ public class CardImporterService {
 
             if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
                 logger.error("❌ Erreur API : {}", response.getStatusCode());
-                return;
+                return 0;
             }
 
             Object data = response.getBody().get("data");
@@ -48,7 +48,7 @@ public class CardImporterService {
                     data,
                     new TypeReference<List<Map<String, Object>>>() {}
             );
-            if (cards == null) return;
+            if (cards == null) return 0;
 
             List<YugiohCard> cardEntities = new ArrayList<>();
             for (Map<String, Object> item : cards) {
@@ -87,11 +87,13 @@ public class CardImporterService {
 
             repository.saveAll(cardEntities);
             logger.info("✅ Importation terminée avec succès : {} cartes enregistrées.", cardEntities.size());
+            return cardEntities.size();
 
         } catch (RestClientException e) {
             logger.error("🚨 Erreur lors de l’appel API", e);
         } catch (Exception e) {
             logger.error("🔥 Erreur inattendue", e);
         }
+        return 0;
     }
 }
