@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -31,7 +32,10 @@ public class CardImporterService {
         this.properties = properties;
         this.objectMapper = objectMapper;
     }
-
+    /**
+     * Importation des cartes depuis l'API YgoProDeck.
+     * Cette méthode est planifiée pour s'exécuter toutes les 24 heures.
+     */
     public void importAllCards() {
         try {
             logger.info("📥 Importation des cartes depuis l'API : {}", properties.getUrl());
@@ -93,5 +97,31 @@ public class CardImporterService {
         } catch (Exception e) {
             logger.error("🔥 Erreur inattendue", e);
         }
+    }
+
+    /**
+     * Tâche planifiée pour importer les cartes toutes les 2 semaines.
+     * Cette méthode est exécutée par le planificateur de tâches de Spring.
+     */
+    @Scheduled(cron = "0 0 4 * * FRI", zone = "Europe/Paris") // Tous les vendredis à 4h00
+    public void scheduledImport() {
+        if (isEvenWeek()) {
+            logger.info("🔄 Début de l'importation planifiée des cartes.");
+            importAllCards();
+            logger.info("🔄 Importation planifiée terminée. Nombre de cartes importées : {}", repository.count());
+        } else {
+            logger.info("⏸️ Pas d'importation cette semaine. Seules les semaines paires sont traitées.");
+        }
+    }
+
+    /**
+     * Tâche planifiée pour importer les cartes toutes les 2 semaines.
+     * Cette méthode est exécutée par le planificateur de tâches de Spring.
+     */
+    private boolean isEvenWeek() {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.temporal.WeekFields weekFields = java.time.temporal.WeekFields.ISO;
+        int weekNumber = today.get(weekFields.weekOfWeekBasedYear());
+        return weekNumber % 2 == 0;
     }
 }
