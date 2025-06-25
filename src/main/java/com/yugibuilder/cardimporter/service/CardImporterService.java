@@ -33,6 +33,13 @@ public class CardImporterService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Importe toutes les cartes depuis l'API YgoProDeck.
+     * Cette méthode récupère les données de l'API, les convertit en entités YugiohCard,
+     * et les enregistre dans la base de données.
+     *
+     * @return Le nombre de cartes importées ou mises à jour.
+     */
     public int importAllCards() {
         try {
             logger.info("📥 Importation des cartes depuis l'API : {}", properties.getUrl());
@@ -52,11 +59,15 @@ public class CardImporterService {
             if (cards == null) return 0;
 
             List<YugiohCard> cardEntities = new ArrayList<>();
-            for (Map<String, Object> item : cards) {
-                YugiohCard card = new YugiohCard();
 
-                // Conversion sécurisée des types
-                card.setId(item.get("id") != null ? ((Number) item.get("id")).intValue() : null);
+            for (Map<String, Object> item : cards) {
+                Integer cardId = item.get("id") != null ? ((Number) item.get("id")).intValue() : null;
+                if (cardId == null) continue;
+
+                Optional<YugiohCard> existingCardOpt = repository.findById(cardId);
+                YugiohCard card = existingCardOpt.orElse(new YugiohCard());
+                card.setId(cardId);
+
                 card.setName((String) item.get("name"));
                 card.setType((String) item.get("type"));
                 card.setDesc((String) item.get("desc"));
@@ -67,35 +78,32 @@ public class CardImporterService {
                 card.setAttribute((String) item.get("attribute"));
                 card.setArchetype((String) item.get("archetype"));
 
-                // Cartes imbriquées
                 card.setCard_images(objectMapper.convertValue(
                         item.get("card_images"),
-                        new TypeReference<List<Map<String, Object>>>() {})
-                );
+                        new TypeReference<List<Map<String, Object>>>() {}));
 
                 card.setCard_sets(objectMapper.convertValue(
                         item.get("card_sets"),
-                        new TypeReference<List<Map<String, Object>>>() {})
-                );
+                        new TypeReference<List<Map<String, Object>>>() {}));
 
                 card.setCard_prices(objectMapper.convertValue(
                         item.get("card_prices"),
-                        new TypeReference<List<Map<String, Object>>>() {})
-                );
+                        new TypeReference<List<Map<String, Object>>>() {}));
 
                 cardEntities.add(card);
             }
 
             repository.saveAll(cardEntities);
-            logger.info("✅ Importation terminée avec succès : {} cartes enregistrées.", cardEntities.size());
+            logger.info("✅ Importation terminée : {} cartes enregistrées ou mises à jour.", cardEntities.size());
             return cardEntities.size();
 
         } catch (RestClientException e) {
             logger.error("🚨 Erreur lors de l’appel API", e);
+            return 0;
         } catch (Exception e) {
             logger.error("🔥 Erreur inattendue", e);
+            return 0;
         }
-        return 0;
     }
 
     /**
