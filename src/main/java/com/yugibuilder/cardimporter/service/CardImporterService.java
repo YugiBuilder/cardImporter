@@ -3,7 +3,11 @@ package com.yugibuilder.cardimporter.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yugibuilder.cardimporter.config.YgoProDeckProperties;
+import com.yugibuilder.cardimporter.model.CardImage;
+import com.yugibuilder.cardimporter.model.CardSet;
 import com.yugibuilder.cardimporter.model.YugiohCard;
+import com.yugibuilder.cardimporter.repository.CardImageRepository;
+import com.yugibuilder.cardimporter.repository.CardSetRepository;
 import com.yugibuilder.cardimporter.repository.YugiohCardRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
@@ -21,88 +24,104 @@ public class CardImporterService {
 
     private static final Logger logger = LoggerFactory.getLogger(CardImporterService.class);
 
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final YugiohCardRepository repository;
+    private final YugiohCardRepository cardRepository;
+    private final CardImageRepository imageRepository;
+    private final CardSetRepository setRepository;
     private final YgoProDeckProperties properties;
     private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     @Autowired
-    public CardImporterService(YugiohCardRepository repository, YgoProDeckProperties properties, ObjectMapper objectMapper) {
-        this.repository = repository;
+    public CardImporterService(
+            YugiohCardRepository cardRepository,
+            CardImageRepository imageRepository,
+            CardSetRepository setRepository,
+            YgoProDeckProperties properties,
+            ObjectMapper objectMapper
+    ) {
+        this.cardRepository = cardRepository;
+        this.imageRepository = imageRepository;
+        this.setRepository = setRepository;
         this.properties = properties;
         this.objectMapper = objectMapper;
     }
 
     /**
      * Importe toutes les cartes depuis l'API YgoProDeck.
-     * Cette méthode récupère les données de l'API, les convertit en entités YugiohCard,
+     * Cette méthode récupère les données de l'API, les convertit en entités,
      * et les enregistre dans la base de données.
      *
-     * @return Le nombre de cartes importées ou mises à jour.
+     * @return Le nombre de cartes importées.
      */
     public int importAllCards() {
         try {
-            logger.info("📥 Importation des cartes depuis l'API : {}", properties.getUrl());
+            logger.info("📥 Importation depuis {}", properties.getUrl());
 
             ResponseEntity<Map> response = restTemplate.getForEntity(properties.getUrl(), Map.class);
 
             if (response.getStatusCode() != HttpStatus.OK || response.getBody() == null) {
                 logger.error("❌ Erreur API : {}", response.getStatusCode());
-                return 0;
+                throw new RuntimeException("Erreur API");
             }
 
             Object data = response.getBody().get("data");
             List<Map<String, Object>> cards = objectMapper.convertValue(
                     data,
-                    new TypeReference<List<Map<String, Object>>>() {}
+                    new TypeReference<>() {}
             );
-            if (cards == null) return 0;
 
-            List<YugiohCard> cardEntities = new ArrayList<>();
-
+            List<YugiohCard> entities = new ArrayList<>();
             for (Map<String, Object> item : cards) {
-                Integer cardId = item.get("id") != null ? ((Number) item.get("id")).intValue() : null;
-                if (cardId == null) continue;
+                Integer id = item.get("id") != null ? ((Number) item.get("id")).intValue() : null;
 
-                Optional<YugiohCard> existingCardOpt = repository.findById(cardId);
-                YugiohCard card = existingCardOpt.orElse(new YugiohCard());
-                card.setId(cardId);
+                if (id == null) continue;
 
+                YugiohCard card = cardRepository.findById(id).orElse(new YugiohCard());
+                card.setId(id);
                 card.setName((String) item.get("name"));
                 card.setType((String) item.get("type"));
                 card.setDesc((String) item.get("desc"));
-                card.setAtk(item.get("atk") != null ? ((Number) item.get("atk")).intValue() : null);
-                card.setDef(item.get("def") != null ? ((Number) item.get("def")).intValue() : null);
-                card.setLevel(item.get("level") != null ? ((Number) item.get("level")).intValue() : null);
+                card.setAtk(convertInt(item.get("atk")));
+                card.setDef(convertInt(item.get("def")));
+                card.setLevel(convertInt(item.get("level")));
                 card.setRace((String) item.get("race"));
                 card.setAttribute((String) item.get("attribute"));
                 card.setArchetype((String) item.get("archetype"));
 
-                card.setCard_images(objectMapper.convertValue(
-                        item.get("card_images"),
-                        new TypeReference<List<Map<String, Object>>>() {}));
+                // Images
+                List<Map<String, Object>> images = (List<Map<String, Object>>) item.get("card_images");
+                List<String> imageIds = new ArrayList<>();
+                if (images != null) {
+                    for (Map<String, Object> img : images) {
+                        CardImage image = objectMapper.convertValue(img, CardImage.class);
+                        image = imageRepository.save(image);
+                        imageIds.add(image.getId());
+                    }
+                }
+                card.setCardImageIds(imageIds);
 
-                card.setCard_sets(objectMapper.convertValue(
-                        item.get("card_sets"),
-                        new TypeReference<List<Map<String, Object>>>() {}));
+                // Sets
+                List<Map<String, Object>> sets = (List<Map<String, Object>>) item.get("card_sets");
+                List<String> setIds = new ArrayList<>();
+                if (sets != null) {
+                    for (Map<String, Object> set : sets) {
+                        CardSet cardSet = objectMapper.convertValue(set, CardSet.class);
+                        cardSet = setRepository.save(cardSet);
+                        setIds.add(cardSet.getId());
+                    }
+                }
+                card.setCardSetIds(setIds);
 
-                card.setCard_prices(objectMapper.convertValue(
-                        item.get("card_prices"),
-                        new TypeReference<List<Map<String, Object>>>() {}));
-
-                cardEntities.add(card);
+                entities.add(card);
             }
 
-            repository.saveAll(cardEntities);
-            logger.info("✅ Importation terminée : {} cartes enregistrées ou mises à jour.", cardEntities.size());
-            return cardEntities.size();
+            cardRepository.saveAll(entities);
+            logger.info("✅ Importation réussie : {} cartes", entities.size());
+            return entities.size();
 
-        } catch (RestClientException e) {
-            logger.error("🚨 Erreur lors de l’appel API", e);
-            return 0;
         } catch (Exception e) {
-            logger.error("🔥 Erreur inattendue", e);
-            return 0;
+            logger.error("🔥 Erreur durant l’import", e);
+            throw new RuntimeException("Importation échouée", e);
         }
     }
 
@@ -115,7 +134,7 @@ public class CardImporterService {
         if (isEvenWeek()) {
             logger.info("🔄 Début de l'importation planifiée des cartes.");
             importAllCards();
-            logger.info("🔄 Importation planifiée terminée. Nombre de cartes importées : {}", repository.count());
+            logger.info("🔄 Importation planifiée terminée. Nombre de cartes importées : {}", cardRepository.count());
         } else {
             logger.info("⏸️ Pas d'importation cette semaine. Seules les semaines paires sont traitées.");
         }
@@ -130,5 +149,16 @@ public class CardImporterService {
         java.time.temporal.WeekFields weekFields = java.time.temporal.WeekFields.ISO;
         int weekNumber = today.get(weekFields.weekOfWeekBasedYear());
         return weekNumber % 2 == 0;
+    }
+
+    /**
+     * Convertit un objet en Integer.
+     * Si l'objet est une instance de Number, il est converti en Integer.
+     * Si l'objet est null ou n'est pas un Number, retourne null.
+     * @param value L'objet à convertir.
+     * @return L'Integer converti ou null si la conversion échoue.
+     */
+    private Integer convertInt(Object value) {
+        return (value instanceof Number) ? ((Number) value).intValue() : null;
     }
 }
