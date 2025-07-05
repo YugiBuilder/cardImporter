@@ -204,8 +204,8 @@ jobs:
 
 * [X] Ajouter Swagger/OpenAPI
 * [X] Déclencher import via requête REST
-* [ ] Gérer la mise à jour des cartes existantes
-* [ ] Séparer les images et sets dans d’autres collections
+* [X] Gérer la mise à jour des cartes existantes
+* [X] Séparer les images et sets dans d’autres collections
 
 ---
 

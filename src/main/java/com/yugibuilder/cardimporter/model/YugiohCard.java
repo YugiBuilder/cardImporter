@@ -24,11 +24,11 @@ public class YugiohCard {
     private String attribute;
     private String archetype;
 
-    // Images
-    private List<Map<String, Object>> card_images;
+    // Liste des ID des images de la carte
+    private List<String> cardImageIds;
 
-    // Sets (éditions)
-    private List<Map<String, Object>> card_sets;
+    // Liste des ID des sets de la carte
+    private List<String> cardSetIds;
 
     // Prix par plateforme
     private List<Map<String, Object>> card_prices;
