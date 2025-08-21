@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: integration-test
+      MONGODB_URI: mongodb://${MONGODB_USER:-testuser}:${MONGODB_PASSWORD:-testpass}@mongodb:27017/${MONGODB_DATABASE:-app-test}
+
+  mongodb:
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-app-test}
+    volumes:
+      - ./scripts/test-data.js:/docker-entrypoint-initdb.d/test-data.js:ro

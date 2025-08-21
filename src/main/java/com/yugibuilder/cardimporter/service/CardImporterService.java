@@ -29,7 +29,7 @@ public class CardImporterService {
     private final CardSetRepository setRepository;
     private final YgoProDeckProperties properties;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
 
     @Autowired
     public CardImporterService(
@@ -37,13 +37,15 @@ public class CardImporterService {
             CardImageRepository imageRepository,
             CardSetRepository setRepository,
             YgoProDeckProperties properties,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            RestTemplate restTemplate
     ) {
         this.cardRepository = cardRepository;
         this.imageRepository = imageRepository;
         this.setRepository = setRepository;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.restTemplate = restTemplate;
     }
 
     /**

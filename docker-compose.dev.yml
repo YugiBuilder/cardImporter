@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      target: build  # Utilise l'image de build pour le hot reload
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DEVTOOLS_RESTART_ENABLED: true
+      JAVA_OPTS: >-
+              -Xms128m 
+              -Xmx256m
+              -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+              -Dspring.devtools.restart.enabled=true
+
+    volumes:
+      - ./src:/app/src:ro
+      - ./target:/app/target
+    ports:
+      - "${DEBUG_PORT:-5005}:5005"  # Port debug JVM
