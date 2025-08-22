@@ -1,0 +1,205 @@
+# Docker Compose adapté pour utiliser GitHub Container Registry
+# Plus besoin de build local - utilise l'image CI/CD
+
+version: '3.8'
+
+services:
+
+  # ==========================================
+  # APPLICATION SPRING BOOT DEPUIS GHCR
+  # ==========================================
+  app:
+  # VERSION CI/CD: Utilise l'image buildée par GitHub Actions
+    image: ghcr.io/votre-username/votre-repo:latest
+  
+  # VERSION DÉVELOPPEMENT LOCAL: Décommentez pour build local
+  # build:
+  #   context: .
+  #   dockerfile: Dockerfile
+  #   target: runtime
+  
+    container_name: spring-boot-app
+    hostname: spring-app
+    restart: unless-stopped
+  
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+  
+    environment:
+    # Spring configuration
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-docker}
+      SERVER_PORT: 8080
+    
+    # MongoDB configuration
+      MONGODB_URI: mongodb://${MONGODB_USER:-your_username}:${MONGODB_PASSWORD:-your_password}@mongodb:27017/${MONGODB_DATABASE:-yugioh_db}?authSource=${MONGODB_DATABASE:-yugioh_db}
+    
+    # JVM configuration optimisée pour container
+      JAVA_OPTS: >-
+        -Xms128m
+        -Xmx256m
+        -XX:+UseG1GC
+        -XX:+UseStringDeduplication
+        -XX:+UseContainerSupport
+        -Djava.security.egd=file:/dev/./urandom
+        -Djava.net.preferIPv4Stack=true
+        -Dnetworkaddress.cache.ttl=60
+    
+    # Logging configuration
+      LOGGING_LEVEL_COM_VOTRE_PACKAGE: ${LOG_LEVEL:-INFO}
+  
+    volumes:
+    # Pour les logs uniquement (pas de hot reload avec image GHCR)
+      - ./logs:/app/logs
+  
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+    networks:
+      - app-network
+  
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+
+  # ==========================================
+  # BASE DE DONNÉES MONGODB (INCHANGÉE)
+  # ==========================================
+  mongodb:
+    image: mongo:7.0-jammy
+    container_name: mongodb
+    hostname: mongodb
+    restart: unless-stopped
+  
+    ports:
+      - "${MONGODB_PORT:-27017}:27017"
+  
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD:-admin123}
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-yugioh_db}
+  
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+  
+    networks:
+      - app-network
+  
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    command: --auth
+
+# ==========================================
+# MONGODB EXPRESS (INCHANGÉE)
+# ==========================================
+  mongodb-express:
+    image: mongo-express:1.0.2-20
+    container_name: mongodb-express
+    hostname: mongo-express
+    restart: unless-stopped
+  
+    ports:
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
+  
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_ROOT_USER:-admin}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_ROOT_PASSWORD:-admin123}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGODB_ROOT_USER:-admin}:${MONGODB_ROOT_PASSWORD:-admin123}@mongodb:27017/
+      ME_CONFIG_BASICAUTH: ${MONGO_EXPRESS_BASICAUTH:-false}
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+  
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+    networks:
+      - app-network
+
+  # ==========================================
+  # REDIS POUR CACHE (INCHANGÉE)
+  # ==========================================
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    hostname: redis
+    restart: unless-stopped
+  
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+  
+    volumes:
+      - redis_data:/data
+  
+    networks:
+      - app-network
+  
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+  
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+
+# ==========================================
+# VOLUMES PERSISTANTS (INCHANGÉS)
+# ==========================================
+volumes:
+  mongodb_data:
+    driver: local
+    name: mongodb_data
+
+  mongodb_config:
+    driver: local
+    name: mongodb_config
+
+  redis_data:
+    driver: local
+    name: redis_data
+
+# ==========================================
+# RÉSEAU INTERNE (INCHANGÉ)
+# ==========================================
+networks:
+  app-network:
+    driver: bridge
+    name: spring-boot-network
+    driver_opts:
+      com.docker.network.driver.mtu: 1500
+
+# ==========================================
+# NOTES D'UTILISATION
+# ==========================================
+
+# DÉMARRAGE PRODUCTION (avec image GHCR):
+# docker-compose up -d
+
+# DÉVELOPPEMENT LOCAL (avec build local):
+# 1. Décommentez la section 'build:' dans le service app
+# 2. Commentez la ligne 'image:' dans le service app  
+# 3. docker-compose up -d --build
+
+# MISE À JOUR DE L'IMAGE DEPUIS GHCR:
+# docker-compose pull app
+# docker-compose up -d app
+
+# VARIABLES D'ENVIRONNEMENT:
+# Créez un fichier .env avec vos valeurs:
+# HOST_PORT=8080
+# MONGODB_USER=votre_user
+# MONGODB_PASSWORD=votre_password
+# MONGODB_DATABASE=votre_db

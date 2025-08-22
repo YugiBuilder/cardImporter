@@ -1,32 +1,28 @@
-# Dockerfile multi-stage optimisé pour Spring Boot + Java 21
-# Version corrigée pour résoudre les problèmes de timeout Maven et versions Alpine
+# Dockerfile optimisé pour Spring Boot avec multi-stage builds
+# Basé sur votre Dockerfile existant mais avec des améliorations pour CI/CD
 
-FROM maven:3.9.6-eclipse-temurin-21-alpine AS build
+# ==========================================
+# Stage 1: Build Dependencies Cache
+# ==========================================
+FROM maven:3.9.6-eclipse-temurin-21-alpine AS dependencies
 
-# Métadonnées
-LABEL stage=builder
+LABEL stage=dependencies
 LABEL maintainer="votre-email@domaine.com"
-LABEL description="Build stage pour application Spring Boot Java 21"
 
-# Variables d'environnement pour Maven avec optimisations de connexion
-ENV MAVEN_OPTS="-Dmaven.repo.local=/root/.m2/repository -Xmx512m -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Dmaven.wagon.httpconnectionManager.ttlSeconds=60 -Dmaven.wagon.http.retryHandler.requestSentEnabled=true -Dmaven.wagon.http.retryHandler.count=5"
-ENV MAVEN_CONFIG=/root/.m2
-
-# Installer APR et les dépendances natives
+# Installation des outils système nécessaires
 RUN apk add --no-cache \
     curl \
     dumb-init \
     tzdata \
-    apr \
-    apr-dev \
-    apr-util \
-    apr-util-dev \
     && rm -rf /var/cache/apk/*
 
-# Création du répertoire de travail
+# Configuration Maven avec optimisations pour CI
+ENV MAVEN_OPTS="-Dmaven.repo.local=/root/.m2/repository -Xmx512m -XX:+TieredCompilation -XX:TieredStopAtLevel=1"
+ENV MAVEN_CONFIG=/root/.m2
+
 WORKDIR /app
 
-# Création d'un fichier settings.xml avec configuration de timeout
+# Configuration Maven pour timeouts optimisés
 RUN mkdir -p /root/.m2 && \
     cat > /root/.m2/settings.xml <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -50,101 +46,111 @@ RUN mkdir -p /root/.m2 && \
 </settings>
 EOF
 
-# Copie des fichiers de configuration Maven
+# Copie des fichiers de configuration Maven seulement
 COPY pom.xml .
 COPY .mvn/ .mvn/
 COPY mvnw .
 COPY mvnw.cmd .
 
-# Test de connectivité réseau avant le téléchargement des dépendances
-RUN echo "Test de connectivité vers Maven Central..." && \
-    curl -f --connect-timeout 30 --max-time 60 https://repo.maven.apache.org/maven2/ || \
-    echo "ATTENTION: Problème de connectivité vers Maven Central"
+# Permissions pour Maven wrapper
+RUN chmod +x mvnw
 
-# Téléchargement des dépendances avec retry et timeouts étendus
-RUN mvn dependency:resolve dependency:resolve-sources -B \
-    -Dmaven.wagon.http.ssl.insecure=true \
-    -Dmaven.wagon.http.ssl.allowall=true \
-    -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
-    -Dmaven.wagon.httpconnectionManager.ttlSeconds=60 \
-    -Dmaven.wagon.http.retryHandler.requestSentEnabled=true \
-    -Dmaven.wagon.http.retryHandler.count=5 \
-    -Dmaven.wagon.http.pool=false \
-    -Dhttp.keepAlive=false \
-    || mvn dependency:go-offline -B \
-       -Dmaven.wagon.http.ssl.insecure=true \
-       -Dmaven.wagon.http.ssl.allowall=true \
-       -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
-       -Dmaven.wagon.httpconnectionManager.ttlSeconds=60 \
-       -Dmaven.wagon.http.retryHandler.requestSentEnabled=true \
-       -Dmaven.wagon.http.retryHandler.count=3
+# Téléchargement des dépendances avec cache
+RUN ./mvnw dependency:go-offline -B || \
+    ./mvnw dependency:resolve dependency:resolve-sources -B
+
+# ==========================================
+# Stage 2: Build Application
+# ==========================================
+FROM dependencies AS build
+
+LABEL stage=builder
 
 # Copie du code source
 COPY src/ src/
 
-# Build de l'application
-RUN mvn clean package -DskipTests -B \
-    -Dmaven.wagon.http.ssl.insecure=true \
-    -Dmaven.wagon.http.ssl.allowall=true \
-    -Dmaven.wagon.http.ssl.ignore.validity.dates=true \
-    && rm -rf /root/.m2/repository/com/votre/package \
-    && ls -la target/
+# Build de l'application avec tests désactivés (tests dans CI)
+RUN ./mvnw clean package -DskipTests -B \
+    && ls -la target/ \
+    && echo "Build completed successfully"
 
 # ==========================================
-# Stage 2: Runtime optimisé
+# Stage 3: Runtime Environment
 # ==========================================
-
 FROM eclipse-temurin:21-jre-alpine AS runtime
 
-# Métadonnées de l'image finale
 LABEL org.opencontainers.image.title="Spring Boot MongoDB App"
 LABEL org.opencontainers.image.description="Application Spring Boot avec MongoDB et Java 21"
 LABEL org.opencontainers.image.version="1.0.0"
 LABEL org.opencontainers.image.authors="votre-email@domaine.com"
-LABEL org.opencontainers.image.source="https://github.com/votre-org/votre-repo"
 
-# Installation des packages nécessaires et nettoyage (sans versions spécifiques)
+# Installation des outils runtime nécessaires
 RUN apk add --no-cache \
     curl \
     dumb-init \
     tzdata \
     && rm -rf /var/cache/apk/*
 
-# Configuration du timezone
+# Configuration timezone
 ENV TZ=Europe/Paris
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Création d'un utilisateur non-root pour la sécurité
+# Création utilisateur non-root pour sécurité
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
-# Création des répertoires nécessaires
+# Création répertoires application
 RUN mkdir -p /app/logs /app/config && \
     chown -R appuser:appgroup /app
 
-# Variables d'environnement pour l'application
-ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC -XX:+UseStringDeduplication -Djava.security.egd=file:/dev/./urandom"
+# Variables d'environnement optimisées
+ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC -XX:+UseStringDeduplication -Djava.security.egd=file:/dev/./urandom -XX:+UseContainerSupport"
 ENV SPRING_PROFILES_ACTIVE=docker
 ENV SERVER_PORT=8080
 
-# Copie du JAR depuis l'étape de build
+# Copie du JAR depuis le stage de build
 COPY --from=build --chown=appuser:appgroup /app/target/*.jar /app/app.jar
 
 # Passage à l'utilisateur non-root
 USER appuser
 
-# Répertoire de travail
 WORKDIR /app
 
 # Exposition du port
 EXPOSE 8080
 
-# Health check
+# Health check optimisé
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${SERVER_PORT}/actuator/health || exit 1
 
-# Point d'entrée avec dumb-init pour un signal handling correct
+# Point d'entrée avec dumb-init
 ENTRYPOINT ["dumb-init", "--"]
 
 # Commande de démarrage
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+# ==========================================
+# Stage 4: Development (optionnel)
+# ==========================================
+FROM build AS development
+
+LABEL stage=development
+
+# Outils de développement
+RUN apk add --no-cache \
+    git \
+    vim \
+    less
+
+# Configuration pour le développement
+ENV SPRING_PROFILES_ACTIVE=dev
+ENV SPRING_DEVTOOLS_RESTART_ENABLED=true
+ENV JAVA_OPTS="-Xms128m -Xmx256m -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
+
+# Port de debug
+EXPOSE 5005
+
+# Volume pour hot reload
+VOLUME ["/app/src", "/app/target"]
+
+CMD ["sh", "-c", "java $JAVA_OPTS -jar target/*.jar"]

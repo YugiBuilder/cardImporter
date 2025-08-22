@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Optional;
 
 @RestController
@@ -102,40 +103,17 @@ public class CardImporterController {
                     content = @Content(mediaType = "application/json")
             )
     })
-    public ResponseEntity<CardWithSetAndImageDTO> getCardBySet(
+    public ResponseEntity<List<YugiohCard>> getCardBySet(
             @Parameter(description = "Nom du set de cartes", required = true, example = "Blue-Eyes White Dragon")
             @PathVariable String setName
     ) {
-        Optional<CardSet> cardSetOpt = cardSetRepository.findAll().stream()
-                .filter(s -> s.getSet_name().equalsIgnoreCase(setName))
-                .findFirst();
+        List<YugiohCard> cards = cardImporterService.getCardsBySetName(setName);
 
-        if (cardSetOpt.isEmpty()) {
+        if (cards.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
-        CardSet targetSet = cardSetOpt.get();
-        Optional<YugiohCard> cardOpt = yugiohCardRepository.findAll().stream()
-                .filter(card -> card.getCardSetIds() != null && card.getCardSetIds().contains(targetSet.getId()))
-                .findFirst();
-
-        if (cardOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        YugiohCard card = cardOpt.get();
-        int setIndex = card.getCardSetIds().indexOf(targetSet.getId());
-        String imageId = (card.getCardImageIds() != null && setIndex < card.getCardImageIds().size())
-                ? card.getCardImageIds().get(setIndex)
-                : null;
-        CardImage image = (imageId != null) ? cardImageRepository.findById(imageId).orElse(null) : null;
-
-        CardWithSetAndImageDTO dto = new CardWithSetAndImageDTO();
-        dto.setYugiohCard(card);
-        dto.setCardSet(targetSet);
-        dto.setCardImage(image);
-
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(cards);
     }
 
     /**
