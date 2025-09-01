@@ -81,8 +81,6 @@ jobs:
       env:
         SPRING_PROFILES_ACTIVE: test
         IMPORT_CARDS_ON_STARTUP: false
-        # Indique à Spring d’utiliser MongoDB embedded pour les tests
-        SPRING_DATA_MONGODB_EMBEDDED_VERSION: 6.0.6
 
       # ─────────────────────────────────────────────
       # Tests d’intégration (faisant également tourner embedded MongoDB)
@@ -93,7 +91,6 @@ jobs:
         SPRING_PROFILES_ACTIVE: test
         TESTCONTAINERS_RYUK_DISABLED: true
         IMPORT_CARDS_ON_STARTUP: false
-        DE_FLAPDOODLE_EMBED_MONGO_VERSION: 6.0.6
 
       # Analyse de sécurité OWASP
     - name: 🛡️ Analyse de sécurité OWASP
