@@ -26,22 +26,24 @@ jobs:
     name: Tests & Qualité du Code
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    
-    services:
-      # MongoDB pour les tests d'intégration
-      mongodb:
-        image: mongo:7.0
-        env:
-          MONGO_INITDB_ROOT_USERNAME: testuser
-          MONGO_INITDB_ROOT_PASSWORD: testpass
-          MONGO_INITDB_DATABASE: testdb
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+
+      # ─────────────────────────────────────────────
+      # Suppression du service MongoDB externe
+      # ─────────────────────────────────────────────
+      # services:
+      #   mongodb:
+      #     image: mongo:7.0
+      #     env:
+      #       MONGO_INITDB_ROOT_USERNAME: testuser
+      #       MONGO_INITDB_ROOT_PASSWORD: testpass
+      #       MONGO_INITDB_DATABASE: testdb
+      #     ports:
+      #       - 27017:27017
+      #     options: >-
+      #       --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+      #       --health-interval 10s
+      #       --health-timeout 5s
+      #       --health-retries 5
 
     steps:
     - name: 📦 Checkout du code
@@ -71,20 +73,29 @@ jobs:
     - name: 🏗️ Compilation
       run: ./mvnw clean compile
 
-    # Tests unitaires
+      # ─────────────────────────────────────────────
+      # Tests unitaires avec profil test + embedded MongoDB
+      # ─────────────────────────────────────────────
     - name: 🧪 Tests unitaires
-      run: ./mvnw test
+      run: ./mvnw test -Dspring.profiles.active=test
       env:
         SPRING_PROFILES_ACTIVE: test
+        IMPORT_CARDS_ON_STARTUP: false
+        # Indique à Spring d’utiliser MongoDB embedded pour les tests
+        SPRING_DATA_MONGODB_EMBEDDED_VERSION: 6.0.6
 
-    # Tests d'intégration avec Testcontainers
-    - name: 🔗 Tests d'intégration (Testcontainers)
-      run: ./mvnw verify -P integration-tests
+      # ─────────────────────────────────────────────
+      # Tests d’intégration (faisant également tourner embedded MongoDB)
+      # ─────────────────────────────────────────────
+    - name: 🔗 Tests d’intégration
+      run: ./mvnw verify -P integration-tests -Dspring.profiles.active=test
       env:
-        SPRING_PROFILES_ACTIVE: integration-test
-        TESTCONTAINERS_RYUK_DISABLED: true  # Optimisation pour CI
+        SPRING_PROFILES_ACTIVE: test
+        TESTCONTAINERS_RYUK_DISABLED: true
+        IMPORT_CARDS_ON_STARTUP: false
+        SPRING_DATA_MONGODB_EMBEDDED_VERSION: 6.0.6
 
-    # Analyse de sécurité OWASP
+      # Analyse de sécurité OWASP
     - name: 🛡️ Analyse de sécurité OWASP
       run: ./mvnw dependency-check:check
       continue-on-error: true  # Ne pas échouer si des vulnérabilités sont trouvées
