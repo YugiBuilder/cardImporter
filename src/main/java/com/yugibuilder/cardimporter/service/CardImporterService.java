@@ -3,6 +3,7 @@ package com.yugibuilder.cardimporter.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yugibuilder.cardimporter.config.YgoProDeckProperties;
+import com.yugibuilder.cardimporter.dto.CardWithDetailsDTO;
 import com.yugibuilder.cardimporter.model.CardImage;
 import com.yugibuilder.cardimporter.model.CardSet;
 import com.yugibuilder.cardimporter.model.YugiohCard;
@@ -19,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class CardImporterService {
@@ -73,7 +73,7 @@ public class CardImporterService {
                     data, new TypeReference<List<Map<String, Object>>>() {}
             );
 
-            // OPTIMISATION 1: Cache des sets existants pour éviter les requêtes répétées
+            // OPTIMISATION 1 : Cache des sets existants pour éviter les requêtes répétées
             Map<String, CardSet> setCache = new HashMap<>();
             setRepository.findAll().forEach(set -> {
                 String key = set.getSet_name() + "||" + set.getSet_code();
@@ -85,7 +85,7 @@ public class CardImporterService {
             List<CardSet> setsToSave = new ArrayList<>();
             List<YugiohCard> cardsToSave = new ArrayList<>();
 
-            // OPTIMISATION 3: Traitement par batch de 1000 cartes
+            // OPTIMISATION 3 : Traitement par batch de 1000 cartes
             int batchSize = 1000;
             int totalCards = cards.size();
 
@@ -174,7 +174,7 @@ public class CardImporterService {
     private void saveBatch(List<CardImage> imagesToSave, List<CardSet> setsToSave,
                            List<YugiohCard> cardsToSave) {
 
-        // OPTIMISATION 4: Batch saves au lieu de sauvegardes individuelles
+        // OPTIMISATION 4 : Batch saves au lieu de sauvegardes individuelles
         if (!imagesToSave.isEmpty()) {
             imageRepository.saveAll(imagesToSave);
             logger.debug("💾 Sauvegardé {} images", imagesToSave.size());
@@ -192,7 +192,7 @@ public class CardImporterService {
     }
 
     /**
-     * Tâche planifiée pour importer les cartes toutes les 2 semaines.
+     * Tâche planifiée pour importer les cartes toutes les DEUX semaines.
      * Cette méthode est exécutée par le planificateur de tâches de Spring.
      */
     @Scheduled(cron = "0 0 4 * * FRI", zone = "Europe/Paris") // Tous les vendredis à 4h00
@@ -207,7 +207,7 @@ public class CardImporterService {
     }
 
     /**
-     * Tâche planifiée pour importer les cartes toutes les 2 semaines.
+     * Tâche planifiée pour importer les cartes toutes les DEUX semaines.
      * Cette méthode est exécutée par le planificateur de tâches de Spring.
      */
     private boolean isEvenWeek() {
@@ -228,7 +228,7 @@ public class CardImporterService {
         return (value instanceof Number) ? ((Number) value).intValue() : null;
     }
 
-    public List<YugiohCard> getCardsBySetName(String setName) {
+    public List<CardWithDetailsDTO> getCardsWithDetailsBySetName(String setName) {
         // Récupérer TOUS les sets avec ce nom
         List<CardSet> cardSets = setRepository.findAllBySetNameIgnoreCase(setName);
 
@@ -245,7 +245,7 @@ public class CardImporterService {
                 .toList();
 
         List<YugiohCard> allCards = cardRepository.findAll();
-        List<YugiohCard> cardsInSets = new ArrayList<>();
+        List<CardWithDetailsDTO> cardsWithDetails = new ArrayList<>();
 
         for (YugiohCard card : allCards) {
             if (card.getCardSetIds() != null) {
@@ -254,13 +254,27 @@ public class CardImporterService {
                         .anyMatch(setIds::contains);
 
                 if (belongsToSet) {
-                    cardsInSets.add(card);
+                    // Trouver le set correspondant
+                    CardSet matchingSet = cardSets.stream()
+                            .filter(set -> card.getCardSetIds().contains(set.getId()))
+                            .findFirst()
+                            .orElse(null);
+
+                    // Récupérer l'image de la carte
+                    CardImage cardImage = null;
+                    if (card.getCardImageIds() != null && !card.getCardImageIds().isEmpty()) {
+                        String imageId = card.getCardImageIds().get(0); // Première image
+                        cardImage = imageRepository.findById(imageId).orElse(null);
+                    }
+
+                    // Créer le DTO composite
+                    CardWithDetailsDTO dto = new CardWithDetailsDTO(card, matchingSet, cardImage);
+                    cardsWithDetails.add(dto);
                 }
             }
         }
 
-        logger.info("Nombre de cartes trouvées dans les sets {} : {}", setName, cardsInSets.size());
-        return cardsInSets;
+        logger.info("Nombre de cartes trouvées dans les sets {} : {}", setName, cardsWithDetails.size());
+        return cardsWithDetails;
     }
-
 }

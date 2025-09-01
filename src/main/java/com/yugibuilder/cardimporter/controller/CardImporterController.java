@@ -1,6 +1,6 @@
 package com.yugibuilder.cardimporter.controller;
 
-import com.yugibuilder.cardimporter.dto.CardWithSetAndImageDTO;
+import com.yugibuilder.cardimporter.dto.CardWithDetailsDTO;
 import com.yugibuilder.cardimporter.model.CardImage;
 import com.yugibuilder.cardimporter.model.CardSet;
 import com.yugibuilder.cardimporter.model.YugiohCard;
@@ -85,36 +85,30 @@ public class CardImporterController {
      */
     @GetMapping("/by-set/{setName}")
     @Operation(
-            summary = "Récupérer une carte par nom de set",
-            description = "Retourne une carte, son set et son image associée pour un nom de set donné"
+            summary = "Récupérer des cartes par nom de set",
+            description = "Retourne toutes les cartes, leurs sets et images associées pour un nom de set donné. Retourne une liste vide si aucune carte n'est trouvée."
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "Carte trouvée",
+                    description = "Requête réussie - peut retourner une liste vide si aucune carte n'est trouvée",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = CardWithSetAndImageDTO.class)
+                            schema = @Schema(implementation = CardWithDetailsDTO.class)
                     )
-            ),
-            @ApiResponse(
-                    responseCode = "404",
-                    description = "Carte non trouvée",
-                    content = @Content(mediaType = "application/json")
             )
     })
-    public ResponseEntity<List<YugiohCard>> getCardBySet(
-            @Parameter(description = "Nom du set de cartes", required = true, example = "Blue-Eyes White Dragon")
+    public ResponseEntity<List<CardWithDetailsDTO>> getCardBySet(
+            @Parameter(description = "Nom du set de cartes", required = true, example = "Legend of Blue Eyes White Dragon")
             @PathVariable String setName
     ) {
-        List<YugiohCard> cards = cardImporterService.getCardsBySetName(setName);
+        List<CardWithDetailsDTO> cards = cardImporterService.getCardsWithDetailsBySetName(setName);
 
-        if (cards.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
+        // ✅ CORRECTION : Toujours retourner 200 OK avec la liste (vide ou non)
+        // Une liste vide est une réponse valide, pas une erreur 404
         return ResponseEntity.ok(cards);
     }
+
 
     /**
      * Endpoint pour obtenir le statut de santé de l'API

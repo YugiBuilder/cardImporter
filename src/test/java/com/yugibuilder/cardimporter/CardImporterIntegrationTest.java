@@ -1,7 +1,7 @@
 package com.yugibuilder.cardimporter;
 
 import com.yugibuilder.cardimporter.config.RestTemplateConfig;
-import com.yugibuilder.cardimporter.dto.CardWithSetAndImageDTO;
+import com.yugibuilder.cardimporter.dto.CardWithDetailsDTO;
 import com.yugibuilder.cardimporter.model.CardImage;
 import com.yugibuilder.cardimporter.model.CardSet;
 import com.yugibuilder.cardimporter.model.YugiohCard;
@@ -122,29 +122,34 @@ class CardImporterIntegrationTest {
         // Given - Insérer des données de test
         insertTestData();
 
-        // When
+        // When - CORRECTION : Attendre un tableau de CardWithDetailsDTO
         String url = "http://localhost:" + port + "/cards/by-set/Legend of Blue Eyes White Dragon";
-        ResponseEntity<CardWithSetAndImageDTO> response = testRestTemplate.getForEntity(
-                url, CardWithSetAndImageDTO.class);
+        ResponseEntity<CardWithDetailsDTO[]> response = testRestTemplate.getForEntity(
+                url, CardWithDetailsDTO[].class);
 
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        CardWithDetailsDTO[] results = response.getBody();
+        assertThat(results).isNotNull();
+        assertThat(results).hasSizeGreaterThan(0);
 
-        CardWithSetAndImageDTO result = response.getBody();
-        assertThat(result).isNotNull();
+        // Vérifier la première carte retournée
+        CardWithDetailsDTO result = results[0];
         assertThat(result.getYugiohCard().getName()).isEqualTo("Dark Magician");
         assertThat(result.getCardSet().getSet_name()).isEqualTo("Legend of Blue Eyes White Dragon");
         assertThat(result.getCardImage().getImage_url()).contains("46986414.jpg");
     }
 
     @Test
-    void shouldReturnNotFoundForUnknownSet() {
+    void shouldReturnEmptyArrayForUnknownSet() {
         // When
         String url = "http://localhost:" + port + "/cards/by-set/UnknownSet";
-        ResponseEntity<String> response = testRestTemplate.getForEntity(url, String.class);
+        ResponseEntity<CardWithDetailsDTO[]> response = testRestTemplate.getForEntity(url, CardWithDetailsDTO[].class);
 
-        // Then
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        // Then - Selon votre logique métier
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody()).isEmpty(); // Tableau vide pour set inexistant
     }
 
     @Test

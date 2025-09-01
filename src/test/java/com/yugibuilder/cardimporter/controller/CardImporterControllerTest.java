@@ -2,6 +2,7 @@ package com.yugibuilder.cardimporter.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import com.yugibuilder.cardimporter.dto.CardWithDetailsDTO;
 import com.yugibuilder.cardimporter.model.CardImage;
 import com.yugibuilder.cardimporter.model.CardSet;
 import com.yugibuilder.cardimporter.model.YugiohCard;
@@ -18,10 +19,12 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.BDDMockito.given;
 
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -100,37 +103,47 @@ class CardImporterControllerTest {
         image.setImage_id(1);
         image.setImage_url("url1");
 
-        given(cardSetRepository.findAll()).willReturn(List.of(set));
-        given(yugiohCardRepository.findAll()).willReturn(List.of(card));
-        given(cardImageRepository.findById("i1")).willReturn(Optional.of(image));
+        // Mock du service au lieu des repositories
+        CardWithDetailsDTO expectedDto = new CardWithDetailsDTO(card, set, image);
+        given(service.getCardsWithDetailsBySetName("MySet"))
+                .willReturn(List.of(expectedDto));
 
         mockMvc.perform(get("/cards/by-set/{setName}", "MySet")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.yugiohCard.name").value("CardA"))
-                .andExpect(jsonPath("$.cardSet.set_name").value("MySet"))
-                .andExpect(jsonPath("$.cardImage.image_url").value("url1"));
+                .andExpect(jsonPath("$", hasSize(1)))  // Vérifier qu'on a une liste avec 1 élément
+                .andExpect(jsonPath("$[0].yugiohCard.name").value("CardA"))
+                .andExpect(jsonPath("$[0].cardSet.set_name").value("MySet"))
+                .andExpect(jsonPath("$[0].cardImage.image_url").value("url1"));
     }
 
+
     @Test
-    @DisplayName("GET /cards/by-set/{setName} → 404 quand le set introuvable")
+    @DisplayName("GET /cards/by-set/{setName} → 200 avec liste vide quand le set est introuvable")
     void getCardBySetNotFoundSet() throws Exception {
-        given(cardSetRepository.findAll()).willReturn(List.of());
-        mockMvc.perform(get("/cards/by-set/{setName}", "NoSet"))
-                .andExpect(status().isNotFound());
+        // ✅ CORRECTION : Le service retourne une liste vide au lieu d'une exception
+        given(service.getCardsWithDetailsBySetName("NoSet"))
+                .willReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/cards/by-set/{setName}", "NoSet")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk()) // ✅ CORRECTION : 200 au lieu de 404
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(0))); // ✅ Liste vide
     }
 
     @Test
-    @DisplayName("GET /cards/by-set/{setName} → 404 quand aucune carte pour le set")
+    @DisplayName("GET /cards/by-set/{setName} → 200 avec liste vide quand aucune carte pour le set")
     void getCardBySetNotFoundCard() throws Exception {
-        CardSet set = new CardSet();
-        set.setId("s1");
-        set.setSet_name("MySet");
-        given(cardSetRepository.findAll()).willReturn(List.of(set));
-        given(yugiohCardRepository.findAll()).willReturn(List.of());
+        // ✅ CORRECTION : Le service retourne une liste vide au lieu d'une exception
+        given(service.getCardsWithDetailsBySetName("MySet"))
+                .willReturn(Collections.emptyList());
 
-        mockMvc.perform(get("/cards/by-set/{setName}", "MySet"))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/cards/by-set/{setName}", "MySet")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk()) // ✅ CORRECTION : 200 au lieu de 404
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$", hasSize(0))); // ✅ Liste vide
     }
 }
