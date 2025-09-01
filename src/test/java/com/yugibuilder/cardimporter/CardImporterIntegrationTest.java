@@ -1,6 +1,7 @@
 package com.yugibuilder.cardimporter;
 
 import com.yugibuilder.cardimporter.config.RestTemplateConfig;
+import com.yugibuilder.cardimporter.config.TestMongoConfig;
 import com.yugibuilder.cardimporter.dto.CardWithDetailsDTO;
 import com.yugibuilder.cardimporter.model.CardImage;
 import com.yugibuilder.cardimporter.model.CardSet;
@@ -9,10 +10,12 @@ import com.yugibuilder.cardimporter.repository.CardImageRepository;
 import com.yugibuilder.cardimporter.repository.CardSetRepository;
 import com.yugibuilder.cardimporter.repository.YugiohCardRepository;
 
+import de.flapdoodle.embed.mongo.spring.autoconfigure.EmbeddedMongoAutoConfiguration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.data.mongo.AutoConfigureDataMongo;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -33,8 +36,8 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @AutoConfigureDataMongo
+@ActiveProfiles("test")
 @Import(RestTemplateConfig.class)
 class CardImporterIntegrationTest {
 
