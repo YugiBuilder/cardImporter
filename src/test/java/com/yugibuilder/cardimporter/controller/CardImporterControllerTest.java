@@ -96,7 +96,7 @@ class CardImporterControllerTest {
         YugiohCard card = new YugiohCard();
         card.setId(1);
         card.setName("CardA");
-        card.setCardSetIds(List.of("s1"));
+        card.setCardSetCodes(List.of("s1"));
         card.setCardImageIds(List.of("i1"));
 
         CardImage image = new CardImage();

@@ -211,7 +211,7 @@ class CardImporterIntegrationTest {
 
         // Vérifier les relations
         assertThat(darkMagician.getCardImageIds()).isNotEmpty();
-        assertThat(darkMagician.getCardSetIds()).isNotEmpty();
+        assertThat(darkMagician.getCardSetCodes()).isNotEmpty();
     }
 
     private void insertTestData() {
@@ -243,73 +243,74 @@ class CardImporterIntegrationTest {
         testCard.setAttribute("DARK");
         testCard.setArchetype("Dark Magician");
         testCard.setCardImageIds(List.of(testImage.getId()));
-        testCard.setCardSetIds(List.of(testSet.getId()));
+        testCard.setCardSetCodes(List.of(testSet.getSet_code()));
 
         cardRepository.save(testCard);
     }
 
     private String createDetailedMockYgoProDeckResponse() {
         return """
-            {
-                "data": [
-                    {
-                        "id": 46986414,
-                        "name": "Dark Magician",
-                        "type": "Normal Monster",
-                        "desc": "The ultimate wizard in terms of attack and defense.",
-                        "atk": 2500,
-                        "def": 2100,
-                        "level": 7,
-                        "race": "Spellcaster",
-                        "attribute": "DARK",
-                        "archetype": "Dark Magician",
-                        "card_sets": [
-                            {
-                                "set_name": "Legend of Blue Eyes White Dragon",
-                                "set_code": "LOB-005",
-                                "set_rarity": "Ultra Rare",
-                                "set_price": "291.56"
-                            }
-                        ],
-                        "card_images": [
-                            {
-                                "id": 46986414,
-                                "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg",
-                                "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986414.jpg"
-                            }
-                        ]
-                    },
-                    {
-                        "id": 89631139,
-                        "name": "Blue-Eyes White Dragon",
-                        "type": "Normal Monster",
-                        "desc": "This legendary dragon is a powerful engine of destruction.",
-                        "atk": 3000,
-                        "def": 2500,
-                        "level": 8,
-                        "race": "Dragon",
-                        "attribute": "LIGHT",
-                        "archetype": "Blue-Eyes",
-                        "card_sets": [
-                            {
-                                "set_name": "Legend of Blue Eyes White Dragon",
-                                "set_code": "LOB-001",
-                                "set_rarity": "Ultra Rare",
-                                "set_price": "350.00"
-                            }
-                        ],
-                        "card_images": [
-                            {
-                                "id": 89631139,
-                                "image_url": "https://images.ygoprodeck.com/images/cards/89631139.jpg",
-                                "image_url_small": "https://images.ygoprodeck.com/images/cards_small/89631139.jpg"
-                            }
-                        ]
-                    }
-                ]
-            }
-            """;
+        {
+            "data": [
+                {
+                    "id": 46986414,
+                    "name": "Dark Magician",
+                    "type": "Normal Monster",
+                    "desc": "The ultimate wizard in terms of attack and defense.",
+                    "atk": 2500,
+                    "def": 2100,
+                    "level": 7,
+                    "race": "Spellcaster",
+                    "attribute": "DARK",
+                    "archetype": "Dark Magician",
+                    "card_sets": [
+                        {
+                            "set_name": "Legend of Blue Eyes White Dragon",
+                            "set_code": "LOB-005",
+                            "set_rarity": "Ultra Rare",
+                            "set_price": "291.56"
+                        }
+                    ],
+                    "card_images": [
+                        {
+                            "image_id": 46986414,
+                            "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg",
+                            "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986414.jpg"
+                        }
+                    ]
+                },
+                {
+                    "id": 89631139,
+                    "name": "Blue-Eyes White Dragon",
+                    "type": "Normal Monster",
+                    "desc": "This legendary dragon is a powerful engine of destruction.",
+                    "atk": 3000,
+                    "def": 2500,
+                    "level": 8,
+                    "race": "Dragon",
+                    "attribute": "LIGHT",
+                    "archetype": "Blue-Eyes",
+                    "card_sets": [
+                        {
+                            "set_name": "Legend of Blue Eyes White Dragon",
+                            "set_code": "LOB-001",
+                            "set_rarity": "Ultra Rare",
+                            "set_price": "350.00"
+                        }
+                    ],
+                    "card_images": [
+                        {
+                            "image_id": 89631139,
+                            "image_url": "https://images.ygoprodeck.com/images/cards/89631139.jpg",
+                            "image_url_small": "https://images.ygoprodeck.com/images/cards_small/89631139.jpg"
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
     }
+
 
     private String createMultipleCardsMockResponse() {
         return """
@@ -334,12 +335,12 @@ class CardImporterIntegrationTest {
                             }
                         ],
                         "card_images": [
-                            {
-                                "id": 12345,
-                                "image_url": "https://test.com/12345.jpg",
-                                "image_url_small": "https://test.com/small/12345.jpg"
-                            }
-                        ]
+                                {
+                                    "image_id": 12345,
+                                    "image_url": "https://test.com/12345.jpg",
+                                    "image_url_small": "https://test.com/small/12345.jpg"
+                                }
+                            ]
                     },
                     {
                         "id": 67890,

@@ -30,6 +30,7 @@
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <lombok.version>1.18.38</lombok.version>
+        <start-class>com.yugibuilder.cardimporter.CardImporterApplication</start-class>
     </properties>
 
     <dependencies>
@@ -113,7 +114,7 @@
         <dependency>
             <groupId>de.flapdoodle.embed</groupId>
             <artifactId>de.flapdoodle.embed.mongo.spring30x</artifactId>
-            <version>4.11.0</version>
+            <version>4.21.0</version>
             <scope>test</scope>
         </dependency>
 
@@ -129,6 +130,29 @@
 
     <build>
         <plugins>
+            <!-- SOLUTION: Spring Boot Maven Plugin - MANQUANT ! -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <!-- Version héritée du parent spring-boot-starter-parent -->
+                <configuration>
+                    <mainClass>com.yugibuilder.cardimporter.CardImporterApplication</mainClass>
+                    <!-- Exclure lombok du JAR final (optionnel) -->
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- Spring Boot Maven Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

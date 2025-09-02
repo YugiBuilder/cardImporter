@@ -50,13 +50,6 @@ public class CardImporterService {
         this.restTemplate = restTemplate;
     }
 
-    /**
-     * Importe toutes les cartes depuis l'API YgoProDeck.
-     * Cette méthode récupère les données de l'API, les convertit en entités,
-     * et les enregistre dans la base de données.
-     *
-     * @return Le nombre de cartes importées.
-     */
     @Transactional
     public int importAllCards() {
         try {
@@ -73,19 +66,16 @@ public class CardImporterService {
                     data, new TypeReference<List<Map<String, Object>>>() {}
             );
 
-            // OPTIMISATION 1 : Cache des sets existants pour éviter les requêtes répétées
             Map<String, CardSet> setCache = new HashMap<>();
             setRepository.findAll().forEach(set -> {
                 String key = set.getSet_name() + "||" + set.getSet_code();
                 setCache.put(key, set);
             });
 
-            // OPTIMISATION 2: Listes pour batch processing
             List<CardImage> imagesToSave = new ArrayList<>();
             List<CardSet> setsToSave = new ArrayList<>();
             List<YugiohCard> cardsToSave = new ArrayList<>();
 
-            // OPTIMISATION 3 : Traitement par batch de 1000 cartes
             int batchSize = 1000;
             int totalCards = cards.size();
 
@@ -97,10 +87,8 @@ public class CardImporterService {
 
                 processBatch(batch, setCache, imagesToSave, setsToSave, cardsToSave);
 
-                // Sauvegarder le batch
                 saveBatch(imagesToSave, setsToSave, cardsToSave);
 
-                // Nettoyer les listes pour le prochain batch
                 imagesToSave.clear();
                 setsToSave.clear();
                 cardsToSave.clear();
@@ -135,7 +123,7 @@ public class CardImporterService {
             card.setAttribute((String) item.get("attribute"));
             card.setArchetype((String) item.get("archetype"));
 
-            // Images - Batch processing
+            // Images
             List<Map<String, Object>> images = (List<Map<String, Object>>) item.get("card_images");
             List<String> imageIds = new ArrayList<>();
             if (images != null) {
@@ -147,9 +135,9 @@ public class CardImporterService {
             }
             card.setCardImageIds(imageIds);
 
-            // Sets - Utilisation du cache
+            // Sets (utilisation du set_code comme référence)
             List<Map<String, Object>> sets = (List<Map<String, Object>>) item.get("card_sets");
-            List<String> setIds = new ArrayList<>();
+            List<String> setCodes = new ArrayList<>();
             if (sets != null) {
                 for (Map<String, Object> set : sets) {
                     String setName = (String) set.get("set_name");
@@ -158,23 +146,20 @@ public class CardImporterService {
 
                     CardSet cardSet = setCache.get(cacheKey);
                     if (cardSet == null) {
-                        // Nouveau set
                         cardSet = objectMapper.convertValue(set, CardSet.class);
                         setsToSave.add(cardSet);
-                        setCache.put(cacheKey, cardSet); // Ajouter au cache
+                        setCache.put(cacheKey, cardSet);
                     }
-                    setIds.add(cardSet.getId());
+                    setCodes.add(setCode);
                 }
             }
-            card.setCardSetIds(setIds);
+            card.setCardSetCodes(setCodes);
             cardsToSave.add(card);
         }
     }
 
     private void saveBatch(List<CardImage> imagesToSave, List<CardSet> setsToSave,
                            List<YugiohCard> cardsToSave) {
-
-        // OPTIMISATION 4 : Batch saves au lieu de sauvegardes individuelles
         if (!imagesToSave.isEmpty()) {
             imageRepository.saveAll(imagesToSave);
             logger.debug("💾 Sauvegardé {} images", imagesToSave.size());
@@ -191,11 +176,7 @@ public class CardImporterService {
         }
     }
 
-    /**
-     * Tâche planifiée pour importer les cartes toutes les DEUX semaines.
-     * Cette méthode est exécutée par le planificateur de tâches de Spring.
-     */
-    @Scheduled(cron = "0 0 4 * * FRI", zone = "Europe/Paris") // Tous les vendredis à 4h00
+    @Scheduled(cron = "0 0 4 * * FRI", zone = "Europe/Paris")
     public void scheduledImport() {
         if (isEvenWeek()) {
             logger.info("🔄 Début de l'importation planifiée des cartes.");
@@ -206,10 +187,6 @@ public class CardImporterService {
         }
     }
 
-    /**
-     * Tâche planifiée pour importer les cartes toutes les DEUX semaines.
-     * Cette méthode est exécutée par le planificateur de tâches de Spring.
-     */
     private boolean isEvenWeek() {
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.temporal.WeekFields weekFields = java.time.temporal.WeekFields.ISO;
@@ -217,19 +194,11 @@ public class CardImporterService {
         return weekNumber % 2 == 0;
     }
 
-    /**
-     * Convertit un objet en Integer.
-     * Si l'objet est une instance de Number, il est converti en Integer.
-     * Si l'objet est null ou n'est pas un Number, retourne null.
-     * @param value L'objet à convertir.
-     * @return L'Integer converti ou null si la conversion échoue.
-     */
     private Integer convertInt(Object value) {
         return (value instanceof Number) ? ((Number) value).intValue() : null;
     }
 
     public List<CardWithDetailsDTO> getCardsWithDetailsBySetName(String setName) {
-        // Récupérer TOUS les sets avec ce nom
         List<CardSet> cardSets = setRepository.findAllBySetNameIgnoreCase(setName);
 
         if (cardSets.isEmpty()) {
@@ -237,37 +206,30 @@ public class CardImporterService {
             return Collections.emptyList();
         }
 
-        logger.info("Sets trouvés : {} pour le nom {}", cardSets.size(), setName);
-
-        // Récupérer les IDs de tous les sets trouvés
-        List<String> setIds = cardSets.stream()
-                .map(CardSet::getId)
+        List<String> setCodes = cardSets.stream()
+                .map(CardSet::getSet_code)
                 .toList();
 
         List<YugiohCard> allCards = cardRepository.findAll();
         List<CardWithDetailsDTO> cardsWithDetails = new ArrayList<>();
 
         for (YugiohCard card : allCards) {
-            if (card.getCardSetIds() != null) {
-                // Vérifier si la carte appartient à l'un des sets trouvés
-                boolean belongsToSet = card.getCardSetIds().stream()
-                        .anyMatch(setIds::contains);
+            if (card.getCardSetCodes() != null) {
+                boolean belongsToSet = card.getCardSetCodes().stream()
+                        .anyMatch(setCodes::contains);
 
                 if (belongsToSet) {
-                    // Trouver le set correspondant
                     CardSet matchingSet = cardSets.stream()
-                            .filter(set -> card.getCardSetIds().contains(set.getId()))
+                            .filter(set -> card.getCardSetCodes().contains(set.getSet_code()))
                             .findFirst()
                             .orElse(null);
 
-                    // Récupérer l'image de la carte
                     CardImage cardImage = null;
                     if (card.getCardImageIds() != null && !card.getCardImageIds().isEmpty()) {
-                        String imageId = card.getCardImageIds().get(0); // Première image
+                        String imageId = card.getCardImageIds().get(0);
                         cardImage = imageRepository.findById(imageId).orElse(null);
                     }
 
-                    // Créer le DTO composite
                     CardWithDetailsDTO dto = new CardWithDetailsDTO(card, matchingSet, cardImage);
                     cardsWithDetails.add(dto);
                 }
