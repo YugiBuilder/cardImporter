@@ -31,6 +31,9 @@
         <maven.compiler.target>21</maven.compiler.target>
         <lombok.version>1.18.38</lombok.version>
         <start-class>com.yugibuilder.cardimporter.CardImporterApplication</start-class>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.organization>votre-organisation</sonar.organization>
+        <sonar.projectKey>YugiBuilder_cardImporter</sonar.projectKey>
     </properties>
 
     <dependencies>
@@ -178,6 +181,44 @@
                 <configuration>
                     <propertiesEncoding>UTF-8</propertiesEncoding>
                 </configuration>
+            </plugin>
+            <!-- Plugin JaCoCo pour la couverture de code -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.11</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Plugin OWASP Dependency Check -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>11.1.0</version>
+                <configuration>
+                    <format>ALL</format>
+                    <failBuildOnCVSS>8</failBuildOnCVSS>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
