@@ -1,5 +1,6 @@
 # Pipeline CI/CD principal pour Spring Boot avec MongoDB
-# Version corrigée avec les bonnes permissions et configurations
+# Adapté pour utiliser GitHub Container Registry (GHCR) au lieu de Docker Hub
+# Aucun compte externe nécessaire !
 
 name: CI/CD Pipeline Spring Boot
 
@@ -8,7 +9,7 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Permet le déclenchement manuel
+  workflow_dispatch:  # Permet le déclenchement manuel
 
 env:
   # Configuration Maven
@@ -26,15 +27,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
-    # Permissions nécessaires pour les tests et rapports
     permissions:
       contents: read          # Lecture du code source
       actions: read           # Lecture des actions
-      checks: write           # Écriture des résultats de tests
-      security-events: write  # Upload des rapports de sécurité
+      checks: write           # OBLIGATOIRE pour test-reporter
+      security-events: write  # Upload des rapports SARIF
+      packages: write         # Push vers GHCR
       pull-requests: write    # Commentaires sur les PR
 
-    # Service MongoDB externe
+    # ─────────────────────────────────────────────
+    # service MongoDB externe
+    # ─────────────────────────────────────────────
     services:
       mongodb:
         image: mongo:7.0
@@ -43,103 +46,102 @@ jobs:
           MONGO_INITDB_ROOT_PASSWORD: testpass
           MONGO_INITDB_DATABASE: testdb
         ports:
-          - 27017:27017
+            - 27017:27017
         options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand("ping")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+            --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+            --health-interval 10s
+            --health-timeout 5s
+            --health-retries 5
 
     steps:
-      - name: 📦 Checkout du code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Nécessaire pour SonarCloud
+    - name: 📦 Checkout du code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Nécessaire pour SonarCloud
 
-      - name: ☕ Configuration Java 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
+    - name: ☕ Configuration Java 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
 
-      - name: 🗃️ Cache Maven
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
+    - name: 🗃️ Cache Maven
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
 
-      - name: 🔧 Configuration des permissions Maven
-        run: chmod +x mvnw
+    - name: 🔧 Configuration des permissions Maven
+      run: chmod +x mvnw
 
-      - name: 📋 Validation du projet Maven
-        run: ./mvnw validate
+    - name: 📋 Validation du projet Maven
+      run: ./mvnw validate
 
-      - name: 🏗️ Compilation
-        run: ./mvnw clean compile
+    - name: 🏗️ Compilation
+      run: ./mvnw clean compile
 
-      # Tests unitaires avec profil test
-      - name: 🧪 Tests unitaires
-        run: ./mvnw test -Dspring.profiles.active=test
-        env:
-          SPRING_PROFILES_ACTIVE: test
-          IMPORT_CARDS_ON_STARTUP: false
+      # ─────────────────────────────────────────────
+      # Tests unitaires avec profil test + embedded MongoDB
+      # ─────────────────────────────────────────────
+    - name: 🧪 Tests unitaires
+      run: ./mvnw test -Dspring.profiles.active=test
+      env:
+        SPRING_PROFILES_ACTIVE: test
+        IMPORT_CARDS_ON_STARTUP: false
 
-      # Tests d'intégration
-      - name: 🔗 Tests d'intégration
-        run: ./mvnw verify -P integration-tests -Dspring.profiles.active=test
-        env:
-          SPRING_PROFILES_ACTIVE: test
-          TESTCONTAINERS_RYUK_DISABLED: true
-          IMPORT_CARDS_ON_STARTUP: false
+      # ─────────────────────────────────────────────
+      # Tests d’intégration (faisant également tourner embedded MongoDB)
+      # ─────────────────────────────────────────────
+    - name: 🔗 Tests d’intégration
+      run: ./mvnw verify -P integration-tests -Dspring.profiles.active=test
+      env:
+        SPRING_PROFILES_ACTIVE: test
+        TESTCONTAINERS_RYUK_DISABLED: true
+        IMPORT_CARDS_ON_STARTUP: false
 
-      # Analyse de sécurité OWASP (maintenant avec le plugin configuré)
-      - name: 🛡️ Analyse de sécurité OWASP
-        run: ./mvnw org.owasp:dependency-check-maven:check
-        continue-on-error: true # Ne pas échouer si des vulnérabilités sont trouvées
+    # Analyse de sécurité OWASP (maintenant avec le plugin configuré)
+    - name: 🛡️ Analyse de sécurité OWASP
+      run: ./mvnw org.owasp:dependency-check-maven:check
+      continue-on-error: true # Ne pas échouer si des vulnérabilités sont trouvées
 
       # Génération des rapports de tests (maintenant avec JaCoCo configuré)
-      - name: 📊 Génération des rapports
-        run: |
-          ./mvnw jacoco:report
-          ./mvnw site -DgenerateReports=true
-        continue-on-error: true
+    - name: 📊 Génération des rapports
+      run: |
+        ./mvnw jacoco:report
+        ./mvnw site -DgenerateReports=true
+      continue-on-error: true
 
-      # Upload des rapports de tests
-      - name: 📤 Upload des rapports de tests
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-reports
-          path: |
-            target/surefire-reports/
-            target/failsafe-reports/
-            target/site/jacoco/
-            target/dependency-check-report.html
-          retention-days: 30
+    # Upload des rapports de tests
+    - name: 📤 Upload des rapports de tests
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-reports
+        path: |
+          target/surefire-reports/
+          target/failsafe-reports/
+          target/site/jacoco/
+          target/dependency-check-report.html
+        retention-days: 30
 
-      # Analyse SonarCloud (avec configuration correcte)
-      - name: 🔍 Analyse SonarCloud
-        if: github.event_name != 'pull_request' || github.head_ref != 'dependabot/**'
-        uses: sonarsource/sonarcloud-github-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
-            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
-        continue-on-error: true
+    # Analyse SonarCloud (seulement sur main et PR)
+    - name: 🔍 Analyse SonarCloud
+      if: github.event_name != 'pull_request' || github.head_ref != 'dependabot/**'
+      uses: sonarsource/sonarcloud-github-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      continue-on-error: true
 
-      # Publication des résultats de tests (avec permissions correctes)
-      - name: 📋 Publication des résultats de tests
-        uses: dorny/test-reporter@v1
-        if: success() || failure()
-        with:
-          name: Tests Maven
-          path: target/surefire-reports/*.xml
-          reporter: java-junit
-          fail-on-error: false
+    # Publication des résultats de tests
+    - name: 📋 Publication des résultats de tests
+      uses: dorny/test-reporter@v1
+      if: success() || failure()
+      with:
+        name: Tests Maven
+        path: target/surefire-reports/*.xml
+        reporter: java-junit
 
   # ==========================================
   # ÉTAPE 2: ANALYSE DE QUALITÉ COMPLÉMENTAIRE
@@ -151,51 +153,47 @@ jobs:
     needs: [test-and-quality]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-    permissions:
-      contents: read
-      actions: read
-
     steps:
-      - name: 📦 Checkout du code
-        uses: actions/checkout@v4
+    - name: 📦 Checkout du code
+      uses: actions/checkout@v4
 
-      - name: ☕ Configuration Java 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
+    - name: ☕ Configuration Java 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
 
-      - name: 🗃️ Cache Maven
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+    - name: 🗃️ Cache Maven
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
 
-      - name: 🔧 Configuration des permissions Maven
-        run: chmod +x mvnw
+    - name: 🔧 Configuration des permissions Maven
+      run: chmod +x mvnw
 
-      - name: 🎯 Checkstyle
-        run: ./mvnw checkstyle:check
-        continue-on-error: true
+    - name: 🎯 Checkstyle
+      run: ./mvnw checkstyle:check
+      continue-on-error: true
 
-      - name: 🐛 SpotBugs
-        run: ./mvnw spotbugs:check
-        continue-on-error: true
+    - name: 🐛 SpotBugs
+      run: ./mvnw spotbugs:check
+      continue-on-error: true
 
-      - name: 🔎 PMD
-        run: ./mvnw pmd:check
-        continue-on-error: true
+    - name: 🔎 PMD
+      run: ./mvnw pmd:check
+      continue-on-error: true
 
-      - name: 📤 Upload rapports qualité
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: quality-reports
-          path: |
-            target/checkstyle-result.xml
-            target/spotbugsXml.xml
-            target/pmd.xml
-          retention-days: 30
+    - name: 📤 Upload rapports qualité
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: quality-reports
+        path: |
+          target/checkstyle-result.xml
+          target/spotbugsXml.xml
+          target/pmd.xml
+        retention-days: 30
 
   # ==========================================
   # ÉTAPE 3: BUILD DOCKER (GITHUB CONTAINER REGISTRY)
@@ -211,59 +209,58 @@ jobs:
     permissions:
       contents: read
       packages: write
-      security-events: write  # Pour Trivy
 
     steps:
-      - name: 📦 Checkout du code
-        uses: actions/checkout@v4
+    - name: 📦 Checkout du code
+      uses: actions/checkout@v4
 
-      - name: 🐳 Configuration Docker Buildx
-        uses: docker/setup-buildx-action@v3
+    - name: 🐳 Configuration Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-      - name: 🔐 Login vers GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+    - name: 🔐 Login vers GitHub Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 📝 Extraction métadonnées
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
+    - name: 📝 Extraction métadonnées
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: 🏗️ Build et Push Docker vers GHCR
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          target: runtime # Stage final du Dockerfile multi-stage
+    - name: 🏗️ Build et Push Docker vers GHCR
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        target: runtime  # Stage final du Dockerfile multi-stage
 
-      - name: 🔍 Scan de sécurité Docker (Trivy)
-        if: github.event_name != 'pull_request'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+    - name: 🔍 Scan de sécurité Docker (Trivy)
+      if: github.event_name != 'pull_request'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
 
-      - name: 📤 Upload résultats Trivy vers GitHub Security
-        if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
+    - name: 📤 Upload résultats Trivy vers GitHub Security
+      if: github.event_name != 'pull_request'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
 
   # ==========================================
   # ÉTAPE 4: DÉPLOIEMENT (OPTIONNEL)
@@ -276,13 +273,17 @@ jobs:
     environment: production
 
     steps:
-      - name: 🚀 Déploiement de l'image GHCR
-        run: |
-          echo "🎉 Déploiement de l'application depuis GHCR..."
-          echo "📦 Image disponible: ghcr.io/${{ github.repository }}:latest"
-          echo "✅ Application déployée avec succès !"
-          # Exemple de commande pour déployer depuis GHCR :
-          # docker run -d -p 8080:8080 ghcr.io/${{ github.repository }}:latest
+    - name: 🚀 Déploiement de l'image GHCR
+      run: |
+        echo "🎉 Déploiement de l'application depuis GHCR..."
+        echo "📦 Image disponible: ghcr.io/${{ github.repository }}:latest"
+        echo "✅ Application déployée avec succès !"
+        
+        # Exemple de commande pour déployer depuis GHCR :
+        # docker run -d -p 8080:8080 ghcr.io/${{ github.repository }}:latest
+        
+        # Ici vous pouvez ajouter vos scripts de déploiement
+        # Par exemple: déploiement sur AWS, Azure, ou votre serveur
 
   # ==========================================
   # NETTOYAGE ET NOTIFICATIONS
@@ -294,18 +295,18 @@ jobs:
     if: always()
 
     steps:
-      - name: 🧹 Nettoyage des artefacts
-        run: echo "Nettoyage terminé"
+    - name: 🧹 Nettoyage des artefacts
+      run: echo "Nettoyage terminé"
 
-      - name: 📧 Notification en cas d'échec
-        if: failure()
-        run: |
-          echo "❌ Le pipeline a échoué!"
-          echo "Veuillez vérifier les logs ci-dessus."
+    - name: 📧 Notification en cas d'échec
+      if: failure()
+      run: |
+        echo "❌ Le pipeline a échoué!"
+        echo "Veuillez vérifier les logs ci-dessus."
 
-      - name: 🎉 Notification de succès
-        if: success()
-        run: |
-          echo "✅ Pipeline exécuté avec succès!"
-          echo "🚀 Votre application est prête!"
-          echo "📦 Image Docker disponible sur: ghcr.io/${{ github.repository }}"
+    - name: 🎉 Notification de succès
+      if: success()
+      run: |
+        echo "✅ Pipeline exécuté avec succès!"
+        echo "🚀 Votre application est prête!"
+        echo "📦 Image Docker disponible sur: ghcr.io/${{ github.repository }}"
