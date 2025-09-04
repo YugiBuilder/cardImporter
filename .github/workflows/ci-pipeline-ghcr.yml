@@ -25,7 +25,7 @@ jobs:
   test-and-quality:
     name: Tests & Qualité du Code
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     permissions:
       contents: read          # Lecture du code source
@@ -102,10 +102,18 @@ jobs:
 
     # Analyse de sécurité OWASP (maintenant avec le plugin configuré)
     - name: 🛡️ Analyse de sécurité OWASP
-      run: ./mvnw org.owasp:dependency-check-maven:check
+      run: ./mvnw org.owasp:dependency-check-maven:check -DnvdApiKey=${{ secrets.NVD_API_KEY }}
       continue-on-error: true # Ne pas échouer si des vulnérabilités sont trouvées
 
-      # Génération des rapports de tests (maintenant avec JaCoCo configuré)
+    - name: 🗃️ Cache OWASP Database
+      uses: actions/cache@v4
+      with:
+       path: ~/.m2/repository/org/owasp/dependency-check-data
+       key: ${{ runner.os }}-owasp-db-${{ steps.get-date.outputs.datetime }}
+       restore-keys: |
+         ${{ runner.os }}-owasp-db-
+
+    # Génération des rapports de tests (maintenant avec JaCoCo configuré)
     - name: 📊 Génération des rapports
       run: |
         ./mvnw jacoco:report
