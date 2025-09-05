@@ -128,6 +128,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/org.owasp/dependency-check-maven -->
+        <dependency>
+            <groupId>org.owasp</groupId>
+            <artifactId>dependency-check-maven</artifactId>
+            <version>12.1.3</version>
+        </dependency>
+
     </dependencies>
 
 
@@ -136,11 +143,19 @@
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>11.1.0</version> <!-- Mettre la version la plus récente -->
+                <version>12.1.3</version>
                 <configuration>
                     <!--suppress UnresolvedMavenProperty -->
-                    <nvdApiKey>${secrets.NVD_API_KEY}</nvdApiKey>
+                    <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                    <failBuildOnCVSS>8</failBuildOnCVSS>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <!-- SOLUTION: Spring Boot Maven Plugin - MANQUANT ! -->
             <plugin>
