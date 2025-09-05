@@ -162,6 +162,10 @@ jobs:
           -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION_KEY }}
           -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
           -Dsonar.host.url=https://sonarcloud.io
+          -Dsonar.java.binaries=target/classes
+          -Dsonar.java.test.binaries=target/test-classes
+          -Dsonar.sources=src/main/java
+          -Dsonar.tests=src/test/java
       continue-on-error: true
 
 
