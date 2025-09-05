@@ -133,6 +133,15 @@
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>11.1.0</version> <!-- Mettre la version la plus récente -->
+                <configuration>
+                    <!--suppress UnresolvedMavenProperty -->
+                    <nvdApiKey>${secrets.NVD_API_KEY}</nvdApiKey>
+                </configuration>
+            </plugin>
             <!-- SOLUTION: Spring Boot Maven Plugin - MANQUANT ! -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
