@@ -150,14 +150,20 @@ jobs:
           target/dependency-check-report.html
         retention-days: 30
 
-    # Analyse SonarCloud (seulement sur main et PR)
+  # APRÈS (Solution 2 - avec paramètres)
     - name: 🔍 Analyse SonarCloud
       if: github.event_name != 'pull_request' || github.head_ref != 'dependabot/**'
       uses: sonarsource/sonarcloud-github-action@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      with:
+        args: >
+          -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION_KEY }}
+          -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+          -Dsonar.host.url=https://sonarcloud.io
       continue-on-error: true
+
 
     # Publication des résultats de tests
     - name: 📋 Publication des résultats de tests
