@@ -291,11 +291,18 @@ jobs:
         format: 'sarif'
         output: 'trivy-results.sarif'
 
-    - name: 📤 Upload résultats Trivy vers GitHub Security
+      # ─────────────────────────────────────────────
+      # NOUVEAU: Sauvegarde comme artefact (GitHub Free compatible)
+      # ─────────────────────────────────────────────
+    - name: 📤 Sauvegarde rapports Trivy comme artefacts
       if: github.event_name != 'pull_request'
-      uses: github/codeql-action/upload-sarif@v3
+      uses: actions/upload-artifact@v4
       with:
-        sarif_file: 'trivy-results.sarif'
+        name: trivy-security-reports
+        path: |
+          trivy-report.txt
+          trivy-results.sarif
+          retention-days: 30
 
   # ==========================================
   # ÉTAPE 4: DÉPLOIEMENT (OPTIONNEL)
