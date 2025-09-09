@@ -121,6 +121,9 @@ jobs:
        restore-keys: |
          ${{ runner.os }}-owasp-db-
 
+      # ─────────────────────────────────────────────
+      # CORRECTION COMPLÈTE: Analyse OWASP avec clé API
+      # ─────────────────────────────────────────────
     - name: 🔍 Debug NVD API Key
       run: |
         if [ -z "$NVD_API_KEY" ]; then
@@ -134,16 +137,19 @@ jobs:
 
     - name: 🛡️ Analyse de sécurité OWASP
       run: |
+        echo "📥 Démarrage de l'analyse OWASP..."
         if [ -n "$NVD_API_KEY" ]; then
           echo "✅ Utilisation de la clé NVD API"
-          ./mvnw dependency-check:check -DnvdApiKey="$NVD_API_KEY" -DfailBuildOnCVSS=8
+          # Méthode 1 : Via le plugin configuré dans pom.xml
+          ./mvnw dependency-check:check
         else
           echo "⚠️ Aucune clé NVD API - scan plus lent"
-          ./mvnw dependency-check:check -DfailBuildOnCVSS=8
+          ./mvnw dependency-check:check
         fi
       continue-on-error: true
       env:
         NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        MAVEN_OPTS: '-Xmx2048m'
 
     # Génération des rapports de tests (maintenant avec JaCoCo configuré)
     - name: 📊 Génération des rapports
