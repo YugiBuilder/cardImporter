@@ -10,7 +10,7 @@ import java.util.Optional;
 public interface CardSetRepository extends MongoRepository<CardSet,String> {
     // Nouvelle méthode qui retourne une liste
     @Query("{ 'set_name' : { $regex: ?0, $options: 'i' } }")
-    List<CardSet> findAllBySetNameIgnoreCase(String set_name);
+    List<CardSet> findAllBySetNameIgnoreCase(String setName);
     @Query("{ 'set_name' : { $regex: ?0, $options: 'i' } }")
-    Optional<CardSet> findBySetNameIgnoreCase(String set_name);
+    Optional<CardSet> findBySetNameIgnoreCase(String setName);
 }

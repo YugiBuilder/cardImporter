@@ -1,12 +1,6 @@
 package com.yugibuilder.cardimporter.controller;
 
 import com.yugibuilder.cardimporter.dto.CardWithDetailsDTO;
-import com.yugibuilder.cardimporter.model.CardImage;
-import com.yugibuilder.cardimporter.model.CardSet;
-import com.yugibuilder.cardimporter.model.YugiohCard;
-import com.yugibuilder.cardimporter.repository.CardImageRepository;
-import com.yugibuilder.cardimporter.repository.CardSetRepository;
-import com.yugibuilder.cardimporter.repository.YugiohCardRepository;
 import com.yugibuilder.cardimporter.service.CardImporterService;
 
 // FIXED: Updated imports for OpenAPI 3 (Spring Boot 3.4)
@@ -23,7 +17,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/cards")
@@ -31,21 +24,12 @@ import java.util.Optional;
 public class CardImporterController {
 
     private final CardImporterService cardImporterService;
-    private final CardSetRepository cardSetRepository;
-    private final YugiohCardRepository yugiohCardRepository;
-    private final CardImageRepository cardImageRepository;
 
     @Autowired
     public CardImporterController(
-            CardImporterService cardImporterService,
-            CardSetRepository cardSetRepository,
-            YugiohCardRepository yugiohCardRepository,
-            CardImageRepository cardImageRepository
+            CardImporterService cardImporterService
     ) {
         this.cardImporterService = cardImporterService;
-        this.cardSetRepository = cardSetRepository;
-        this.yugiohCardRepository = yugiohCardRepository;
-        this.cardImageRepository = cardImageRepository;
     }
 
     /**

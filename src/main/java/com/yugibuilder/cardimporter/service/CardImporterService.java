@@ -66,11 +66,7 @@ public class CardImporterService {
                     data, new TypeReference<List<Map<String, Object>>>() {}
             );
 
-            Map<String, CardSet> setCache = new HashMap<>();
-            setRepository.findAll().forEach(set -> {
-                String key = set.getSet_name() + "||" + set.getSet_code();
-                setCache.put(key, set);
-            });
+            Map<String, CardSet> setCache = buildSetCache();
 
             List<CardImage> imagesToSave = new ArrayList<>();
             List<CardSet> setsToSave = new ArrayList<>();
@@ -86,76 +82,149 @@ public class CardImporterService {
                 logger.info("📦 Traitement du batch {}-{}/{}", i + 1, endIndex, totalCards);
 
                 processBatch(batch, setCache, imagesToSave, setsToSave, cardsToSave);
-
                 saveBatch(imagesToSave, setsToSave, cardsToSave);
 
-                imagesToSave.clear();
-                setsToSave.clear();
-                cardsToSave.clear();
+                clearBatchLists(imagesToSave, setsToSave, cardsToSave);
             }
 
             logger.info("✅ Importation réussie : {} cartes", totalCards);
             return totalCards;
-
         } catch (Exception e) {
             logger.error("🔥 Erreur durant l'import", e);
             throw new RuntimeException("Importation échouée", e);
         }
     }
 
+    /**
+     * VERSION REFACTORISÉE - Méthode principale simplifiée
+     */
     private void processBatch(List<Map<String, Object>> batch, Map<String, CardSet> setCache,
                               List<CardImage> imagesToSave, List<CardSet> setsToSave,
                               List<YugiohCard> cardsToSave) {
-
         for (Map<String, Object> item : batch) {
-            Integer id = item.get("id") != null ? ((Number) item.get("id")).intValue() : null;
-            if (id == null) continue;
+            Integer cardId = extractCardId(item);
+            if (cardId == null) continue;
 
-            YugiohCard card = cardRepository.findById(id).orElse(new YugiohCard());
-            card.setId(id);
-            card.setName((String) item.get("name"));
-            card.setType((String) item.get("type"));
-            card.setDesc((String) item.get("desc"));
-            card.setAtk(convertInt(item.get("atk")));
-            card.setDef(convertInt(item.get("def")));
-            card.setLevel(convertInt(item.get("level")));
-            card.setRace((String) item.get("race"));
-            card.setAttribute((String) item.get("attribute"));
-            card.setArchetype((String) item.get("archetype"));
+            YugiohCard card = getOrCreateCard(cardId);
+            mapBasicCardProperties(card, item);
 
-            // Images
-            List<Map<String, Object>> images = (List<Map<String, Object>>) item.get("card_images");
-            List<String> imageIds = new ArrayList<>();
-            if (images != null) {
-                for (Map<String, Object> img : images) {
-                    CardImage image = objectMapper.convertValue(img, CardImage.class);
-                    imagesToSave.add(image);
-                    imageIds.add(image.getId());
-                }
-            }
+            List<String> imageIds = processCardImages(item, imagesToSave);
             card.setCardImageIds(imageIds);
 
-            // Sets (utilisation du set_code comme référence)
-            List<Map<String, Object>> sets = (List<Map<String, Object>>) item.get("card_sets");
-            List<String> setCodes = new ArrayList<>();
-            if (sets != null) {
-                for (Map<String, Object> set : sets) {
-                    String setName = (String) set.get("set_name");
-                    String setCode = (String) set.get("set_code");
-                    String cacheKey = setName + "||" + setCode;
-
-                    CardSet cardSet = setCache.get(cacheKey);
-                    if (cardSet == null) {
-                        cardSet = objectMapper.convertValue(set, CardSet.class);
-                        setsToSave.add(cardSet);
-                        setCache.put(cacheKey, cardSet);
-                    }
-                    setCodes.add(setCode);
-                }
-            }
+            List<String> setCodes = processCardSets(item, setCache, setsToSave);
             card.setCardSetCodes(setCodes);
+
             cardsToSave.add(card);
         }
+    }
+
+    /**
+     * Extrait et valide l'ID de la carte
+     */
+    private Integer extractCardId(Map<String, Object> item) {
+        Object id = item.get("id");
+        return id != null ? ((Number) id).intValue() : null;
+    }
+
+    /**
+     * Récupère une carte existante ou en crée une nouvelle
+     */
+    private YugiohCard getOrCreateCard(Integer cardId) {
+        return cardRepository.findById(cardId).orElse(new YugiohCard());
+    }
+
+    /**
+     * Mappe les propriétés de base de la carte
+     */
+    private void mapBasicCardProperties(YugiohCard card, Map<String, Object> item) {
+        card.setId(((Number) item.get("id")).intValue());
+        card.setName((String) item.get("name"));
+        card.setType((String) item.get("type"));
+        card.setDesc((String) item.get("desc"));
+        card.setAtk(convertInt(item.get("atk")));
+        card.setDef(convertInt(item.get("def")));
+        card.setLevel(convertInt(item.get("level")));
+        card.setRace((String) item.get("race"));
+        card.setAttribute((String) item.get("attribute"));
+        card.setArchetype((String) item.get("archetype"));
+    }
+
+    /**
+     * Traite les images de la carte
+     */
+    private List<String> processCardImages(Map<String, Object> item, List<CardImage> imagesToSave) {
+        List<Map<String, Object>> images = (List<Map<String, Object>>) item.get("card_images");
+        List<String> imageIds = new ArrayList<>();
+
+        if (images != null) {
+            for (Map<String, Object> img : images) {
+                CardImage image = objectMapper.convertValue(img, CardImage.class);
+                imagesToSave.add(image);
+                imageIds.add(image.getId());
+            }
+        }
+
+        return imageIds;
+    }
+
+    /**
+     * Traite les sets de la carte
+     */
+    private List<String> processCardSets(Map<String, Object> item, Map<String, CardSet> setCache,
+                                         List<CardSet> setsToSave) {
+        List<Map<String, Object>> sets = (List<Map<String, Object>>) item.get("card_sets");
+        List<String> setCodes = new ArrayList<>();
+
+        if (sets != null) {
+            for (Map<String, Object> set : sets) {
+                String setName = (String) set.get("set_name");
+                String setCode = (String) set.get("set_code");
+
+                getOrCreateCardSet(setName, setCode, set, setCache, setsToSave);
+                setCodes.add(setCode);
+            }
+        }
+
+        return setCodes;
+    }
+
+    /**
+     * Récupère un set existant du cache ou en crée un nouveau
+     */
+    private CardSet getOrCreateCardSet(String setName, String setCode, Map<String, Object> setData,
+                                       Map<String, CardSet> setCache, List<CardSet> setsToSave) {
+        String cacheKey = setName + "||" + setCode;
+        CardSet cardSet = setCache.get(cacheKey);
+
+        if (cardSet == null) {
+            cardSet = objectMapper.convertValue(setData, CardSet.class);
+            setsToSave.add(cardSet);
+            setCache.put(cacheKey, cardSet);
+        }
+
+        return cardSet;
+    }
+
+    /**
+     * Construit le cache des sets pour éviter les requêtes répétées
+     */
+    private Map<String, CardSet> buildSetCache() {
+        Map<String, CardSet> setCache = new HashMap<>();
+        setRepository.findAll().forEach(set -> {
+            String key = set.getSet_name() + "||" + set.getSet_code();
+            setCache.put(key, set);
+        });
+        return setCache;
+    }
+
+    /**
+     * Vide les listes pour le prochain batch
+     */
+    private void clearBatchLists(List<CardImage> imagesToSave, List<CardSet> setsToSave,
+                                 List<YugiohCard> cardsToSave) {
+        imagesToSave.clear();
+        setsToSave.clear();
+        cardsToSave.clear();
     }
 
     private void saveBatch(List<CardImage> imagesToSave, List<CardSet> setsToSave,
@@ -200,7 +269,6 @@ public class CardImporterService {
 
     public List<CardWithDetailsDTO> getCardsWithDetailsBySetName(String setName) {
         List<CardSet> cardSets = setRepository.findAllBySetNameIgnoreCase(setName);
-
         if (cardSets.isEmpty()) {
             logger.warn("Aucun set trouvé pour le nom : {}", setName);
             return Collections.emptyList();
@@ -209,7 +277,6 @@ public class CardImporterService {
         List<String> setCodes = cardSets.stream()
                 .map(CardSet::getSet_code)
                 .toList();
-
         List<YugiohCard> allCards = cardRepository.findAll();
         List<CardWithDetailsDTO> cardsWithDetails = new ArrayList<>();
 
