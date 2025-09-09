@@ -150,13 +150,18 @@
                 <version>12.1.3</version>
                 <configuration>
                     <!-- OPTION A : Utiliser la variable d'environnement (RECOMMANDÉ pour CI) -->
-                    <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+                    <!-- <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable> -->
                     <!-- OU OPTION B : Directement depuis env (alternative) -->
-                    <!-- <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey> -->
-
-                    <nvdApiDelay>3000</nvdApiDelay>
+                    <!--suppress UnresolvedMavenProperty -->
+                    <nvdApiKey>${secrets.NVD_API_KEY}</nvdApiKey>
+                    <nvdApiDelay>16000</nvdApiDelay>
                     <failBuildOnCVSS>8</failBuildOnCVSS>
-                    <suppressionFile>suppressions.xml</suppressionFile>
+                    <dataDirectory>/tmp/owasp</dataDirectory>
+                    <formats>
+                        <!-- we need both HTML (for humans) and JSON (for machines) to make the report useful in Sonar -->
+                        <format>html</format>
+                        <format>json</format>
+                    </formats>
                 </configuration>
                 <executions>
                     <execution>
