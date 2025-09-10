@@ -188,21 +188,3 @@ class RestTemplateConfigTest {
         }
     }
 }
-
-// CORRECTION SUPPLÉMENTAIRE: Le problème identifié indique que la logique
-// dans RestTemplateConfig.getApiBaseUrl() est incorrecte.
-//
-// La logique actuelle:
-// if (apiUrl != null && apiUrl.contains("?")) {
-//     return apiUrl.substring(0, apiUrl.indexOf("?"));
-// }
-// return "https://db.ygoprodeck.com/api/v7";
-//
-// DOIT être corrigée en:
-// if (apiUrl != null && !apiUrl.isEmpty()) {
-//     if (apiUrl.contains("?")) {
-//         return apiUrl.substring(0, apiUrl.indexOf("?"));
-//     }
-//     return apiUrl; // Retourner l'URL complète si pas de paramètres
-// }
-// return "https://db.ygoprodeck.com/api/v7";
