@@ -1,12 +1,6 @@
 package com.yugibuilder.cardimporter.controller;
 
-import com.yugibuilder.cardimporter.dto.CardWithSetAndImageDTO;
-import com.yugibuilder.cardimporter.model.CardImage;
-import com.yugibuilder.cardimporter.model.CardSet;
-import com.yugibuilder.cardimporter.model.YugiohCard;
-import com.yugibuilder.cardimporter.repository.CardImageRepository;
-import com.yugibuilder.cardimporter.repository.CardSetRepository;
-import com.yugibuilder.cardimporter.repository.YugiohCardRepository;
+import com.yugibuilder.cardimporter.dto.CardWithDetailsDTO;
 import com.yugibuilder.cardimporter.service.CardImporterService;
 
 // FIXED: Updated imports for OpenAPI 3 (Spring Boot 3.4)
@@ -22,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Optional;
+import java.util.List;
 
 @RestController
 @RequestMapping("/cards")
@@ -30,21 +24,12 @@ import java.util.Optional;
 public class CardImporterController {
 
     private final CardImporterService cardImporterService;
-    private final CardSetRepository cardSetRepository;
-    private final YugiohCardRepository yugiohCardRepository;
-    private final CardImageRepository cardImageRepository;
 
     @Autowired
     public CardImporterController(
-            CardImporterService cardImporterService,
-            CardSetRepository cardSetRepository,
-            YugiohCardRepository yugiohCardRepository,
-            CardImageRepository cardImageRepository
+            CardImporterService cardImporterService
     ) {
         this.cardImporterService = cardImporterService;
-        this.cardSetRepository = cardSetRepository;
-        this.yugiohCardRepository = yugiohCardRepository;
-        this.cardImageRepository = cardImageRepository;
     }
 
     /**
@@ -84,59 +69,30 @@ public class CardImporterController {
      */
     @GetMapping("/by-set/{setName}")
     @Operation(
-            summary = "Récupérer une carte par nom de set",
-            description = "Retourne une carte, son set et son image associée pour un nom de set donné"
+            summary = "Récupérer des cartes par nom de set",
+            description = "Retourne toutes les cartes, leurs sets et images associées pour un nom de set donné. Retourne une liste vide si aucune carte n'est trouvée."
     )
     @ApiResponses(value = {
             @ApiResponse(
                     responseCode = "200",
-                    description = "Carte trouvée",
+                    description = "Requête réussie - peut retourner une liste vide si aucune carte n'est trouvée",
                     content = @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = CardWithSetAndImageDTO.class)
+                            schema = @Schema(implementation = CardWithDetailsDTO.class)
                     )
-            ),
-            @ApiResponse(
-                    responseCode = "404",
-                    description = "Carte non trouvée",
-                    content = @Content(mediaType = "application/json")
             )
     })
-    public ResponseEntity<CardWithSetAndImageDTO> getCardBySet(
-            @Parameter(description = "Nom du set de cartes", required = true, example = "Blue-Eyes White Dragon")
+    public ResponseEntity<List<CardWithDetailsDTO>> getCardBySet(
+            @Parameter(description = "Nom du set de cartes", required = true, example = "Legend of Blue Eyes White Dragon")
             @PathVariable String setName
     ) {
-        Optional<CardSet> cardSetOpt = cardSetRepository.findAll().stream()
-                .filter(s -> s.getSet_name().equalsIgnoreCase(setName))
-                .findFirst();
+        List<CardWithDetailsDTO> cards = cardImporterService.getCardsWithDetailsBySetName(setName);
 
-        if (cardSetOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        CardSet targetSet = cardSetOpt.get();
-        Optional<YugiohCard> cardOpt = yugiohCardRepository.findAll().stream()
-                .filter(card -> card.getCardSetIds() != null && card.getCardSetIds().contains(targetSet.getId()))
-                .findFirst();
-
-        if (cardOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        YugiohCard card = cardOpt.get();
-        int setIndex = card.getCardSetIds().indexOf(targetSet.getId());
-        String imageId = (card.getCardImageIds() != null && setIndex < card.getCardImageIds().size())
-                ? card.getCardImageIds().get(setIndex)
-                : null;
-        CardImage image = (imageId != null) ? cardImageRepository.findById(imageId).orElse(null) : null;
-
-        CardWithSetAndImageDTO dto = new CardWithSetAndImageDTO();
-        dto.setYugiohCard(card);
-        dto.setCardSet(targetSet);
-        dto.setCardImage(image);
-
-        return ResponseEntity.ok(dto);
+        // ✅ CORRECTION : Toujours retourner 200 OK avec la liste (vide ou non)
+        // Une liste vide est une réponse valide, pas une erreur 404
+        return ResponseEntity.ok(cards);
     }
+
 
     /**
      * Endpoint pour obtenir le statut de santé de l'API

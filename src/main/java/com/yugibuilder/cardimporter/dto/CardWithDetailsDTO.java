@@ -10,8 +10,14 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class CardWithSetAndImageDTO {
+public class CardWithDetailsDTO {
     private YugiohCard yugiohCard;
     private CardSet cardSet;
     private CardImage cardImage;
+
+    public CardWithDetailsDTO(YugiohCard yugiohCard, CardSet cardSet, CardImage cardImage) {
+        this.yugiohCard = yugiohCard;
+        this.cardSet = cardSet;
+        this.cardImage = cardImage;
+    }
 }

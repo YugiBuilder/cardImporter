@@ -1,13 +1,14 @@
 package com.yugibuilder.cardimporter;
 
 import com.yugibuilder.cardimporter.config.RestTemplateConfig;
-import com.yugibuilder.cardimporter.dto.CardWithSetAndImageDTO;
+import com.yugibuilder.cardimporter.dto.CardWithDetailsDTO;
 import com.yugibuilder.cardimporter.model.CardImage;
 import com.yugibuilder.cardimporter.model.CardSet;
 import com.yugibuilder.cardimporter.model.YugiohCard;
 import com.yugibuilder.cardimporter.repository.CardImageRepository;
 import com.yugibuilder.cardimporter.repository.CardSetRepository;
 import com.yugibuilder.cardimporter.repository.YugiohCardRepository;
+
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,8 +34,8 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
 @AutoConfigureDataMongo
+@ActiveProfiles("test")
 @Import(RestTemplateConfig.class)
 class CardImporterIntegrationTest {
 
@@ -122,29 +123,34 @@ class CardImporterIntegrationTest {
         // Given - Insérer des données de test
         insertTestData();
 
-        // When
+        // When - CORRECTION : Attendre un tableau de CardWithDetailsDTO
         String url = "http://localhost:" + port + "/cards/by-set/Legend of Blue Eyes White Dragon";
-        ResponseEntity<CardWithSetAndImageDTO> response = testRestTemplate.getForEntity(
-                url, CardWithSetAndImageDTO.class);
+        ResponseEntity<CardWithDetailsDTO[]> response = testRestTemplate.getForEntity(
+                url, CardWithDetailsDTO[].class);
 
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        CardWithDetailsDTO[] results = response.getBody();
+        assertThat(results).isNotNull();
+        assertThat(results).hasSizeGreaterThan(0);
 
-        CardWithSetAndImageDTO result = response.getBody();
-        assertThat(result).isNotNull();
+        // Vérifier la première carte retournée
+        CardWithDetailsDTO result = results[0];
         assertThat(result.getYugiohCard().getName()).isEqualTo("Dark Magician");
         assertThat(result.getCardSet().getSet_name()).isEqualTo("Legend of Blue Eyes White Dragon");
         assertThat(result.getCardImage().getImage_url()).contains("46986414.jpg");
     }
 
     @Test
-    void shouldReturnNotFoundForUnknownSet() {
+    void shouldReturnEmptyArrayForUnknownSet() {
         // When
         String url = "http://localhost:" + port + "/cards/by-set/UnknownSet";
-        ResponseEntity<String> response = testRestTemplate.getForEntity(url, String.class);
+        ResponseEntity<CardWithDetailsDTO[]> response = testRestTemplate.getForEntity(url, CardWithDetailsDTO[].class);
 
-        // Then
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        // Then - Selon votre logique métier
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody()).isEmpty(); // Tableau vide pour set inexistant
     }
 
     @Test
@@ -205,7 +211,7 @@ class CardImporterIntegrationTest {
 
         // Vérifier les relations
         assertThat(darkMagician.getCardImageIds()).isNotEmpty();
-        assertThat(darkMagician.getCardSetIds()).isNotEmpty();
+        assertThat(darkMagician.getCardSetCodes()).isNotEmpty();
     }
 
     private void insertTestData() {
@@ -237,73 +243,74 @@ class CardImporterIntegrationTest {
         testCard.setAttribute("DARK");
         testCard.setArchetype("Dark Magician");
         testCard.setCardImageIds(List.of(testImage.getId()));
-        testCard.setCardSetIds(List.of(testSet.getId()));
+        testCard.setCardSetCodes(List.of(testSet.getSet_code()));
 
         cardRepository.save(testCard);
     }
 
     private String createDetailedMockYgoProDeckResponse() {
         return """
-            {
-                "data": [
-                    {
-                        "id": 46986414,
-                        "name": "Dark Magician",
-                        "type": "Normal Monster",
-                        "desc": "The ultimate wizard in terms of attack and defense.",
-                        "atk": 2500,
-                        "def": 2100,
-                        "level": 7,
-                        "race": "Spellcaster",
-                        "attribute": "DARK",
-                        "archetype": "Dark Magician",
-                        "card_sets": [
-                            {
-                                "set_name": "Legend of Blue Eyes White Dragon",
-                                "set_code": "LOB-005",
-                                "set_rarity": "Ultra Rare",
-                                "set_price": "291.56"
-                            }
-                        ],
-                        "card_images": [
-                            {
-                                "id": 46986414,
-                                "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg",
-                                "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986414.jpg"
-                            }
-                        ]
-                    },
-                    {
-                        "id": 89631139,
-                        "name": "Blue-Eyes White Dragon",
-                        "type": "Normal Monster",
-                        "desc": "This legendary dragon is a powerful engine of destruction.",
-                        "atk": 3000,
-                        "def": 2500,
-                        "level": 8,
-                        "race": "Dragon",
-                        "attribute": "LIGHT",
-                        "archetype": "Blue-Eyes",
-                        "card_sets": [
-                            {
-                                "set_name": "Legend of Blue Eyes White Dragon",
-                                "set_code": "LOB-001",
-                                "set_rarity": "Ultra Rare",
-                                "set_price": "350.00"
-                            }
-                        ],
-                        "card_images": [
-                            {
-                                "id": 89631139,
-                                "image_url": "https://images.ygoprodeck.com/images/cards/89631139.jpg",
-                                "image_url_small": "https://images.ygoprodeck.com/images/cards_small/89631139.jpg"
-                            }
-                        ]
-                    }
-                ]
-            }
-            """;
+        {
+            "data": [
+                {
+                    "id": 46986414,
+                    "name": "Dark Magician",
+                    "type": "Normal Monster",
+                    "desc": "The ultimate wizard in terms of attack and defense.",
+                    "atk": 2500,
+                    "def": 2100,
+                    "level": 7,
+                    "race": "Spellcaster",
+                    "attribute": "DARK",
+                    "archetype": "Dark Magician",
+                    "card_sets": [
+                        {
+                            "set_name": "Legend of Blue Eyes White Dragon",
+                            "set_code": "LOB-005",
+                            "set_rarity": "Ultra Rare",
+                            "set_price": "291.56"
+                        }
+                    ],
+                    "card_images": [
+                        {
+                            "image_id": 46986414,
+                            "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg",
+                            "image_url_small": "https://images.ygoprodeck.com/images/cards_small/46986414.jpg"
+                        }
+                    ]
+                },
+                {
+                    "id": 89631139,
+                    "name": "Blue-Eyes White Dragon",
+                    "type": "Normal Monster",
+                    "desc": "This legendary dragon is a powerful engine of destruction.",
+                    "atk": 3000,
+                    "def": 2500,
+                    "level": 8,
+                    "race": "Dragon",
+                    "attribute": "LIGHT",
+                    "archetype": "Blue-Eyes",
+                    "card_sets": [
+                        {
+                            "set_name": "Legend of Blue Eyes White Dragon",
+                            "set_code": "LOB-001",
+                            "set_rarity": "Ultra Rare",
+                            "set_price": "350.00"
+                        }
+                    ],
+                    "card_images": [
+                        {
+                            "image_id": 89631139,
+                            "image_url": "https://images.ygoprodeck.com/images/cards/89631139.jpg",
+                            "image_url_small": "https://images.ygoprodeck.com/images/cards_small/89631139.jpg"
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
     }
+
 
     private String createMultipleCardsMockResponse() {
         return """
@@ -328,12 +335,12 @@ class CardImporterIntegrationTest {
                             }
                         ],
                         "card_images": [
-                            {
-                                "id": 12345,
-                                "image_url": "https://test.com/12345.jpg",
-                                "image_url_small": "https://test.com/small/12345.jpg"
-                            }
-                        ]
+                                {
+                                    "image_id": 12345,
+                                    "image_url": "https://test.com/12345.jpg",
+                                    "image_url_small": "https://test.com/small/12345.jpg"
+                                }
+                            ]
                     },
                     {
                         "id": 67890,

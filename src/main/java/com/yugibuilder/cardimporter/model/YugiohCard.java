@@ -28,7 +28,7 @@ public class YugiohCard {
     private List<String> cardImageIds;
 
     // Liste des ID des sets de la carte
-    private List<String> cardSetIds;
+    private List<String> cardSetCodes;
 
     // Prix par plateforme
     private List<Map<String, Object>> card_prices;
