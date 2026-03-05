@@ -53,10 +53,11 @@ jobs:
           IMPORT_CARDS_ON_STARTUP: false
 
       - name: SonarCloud Scan
-        run: ./mvnw sonar:sonar \
-          -Dsonar.projectKey= ${{ secrets.SONAR_PROJECT_KEY }} \
-          -Dsonar.organization= ${{ secrets.SONAR_ORGANIZATION_KEY }} \
-          -Dsonar.host.url=https://sonarcloud.io
+        run: |
+          ./mvnw sonar:sonar \
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
+            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION_KEY }} \
+            -Dsonar.host.url=https://sonarcloud.io
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
